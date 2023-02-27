@@ -111,7 +111,7 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), String> {
         Some('}') => Ok((Some(Token::RightCurlyBracket), &source[1..])),
         Some(c) if c.is_ascii_lowercase() || c == '_' => consume_function_name(source),
         // TODO: support different types (hexadecimal, binary, octal, character)
-        Some(c) if c.is_ascii_digit() && c != '0' => consume_word(source),
+        Some(c) if c.is_ascii_digit() => consume_word(source),
         Some(c) if c.is_whitespace() => consume_whitespace(source),
         Some(c) => Err(format!("Syntax error: unexpected character '{c}'.")),
     }
