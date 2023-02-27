@@ -9,7 +9,7 @@ plates is an esoteric, imperative, stack-based programming language.
     - If a function name is provided, that function is pushed onto the stack.
     - If the token `^` is provided, the value at the top of the stack is copied.
     - If the token `*` is provided, a random byte (from a uniform distribution) is generated.
-- `DEFN <function-name> (<instructions>)`: defines a function.
+- `DEFN <function-name> { <instructions> }`: defines a function.
 - `CALLIF`: checks the data word at the top of the stack. If it is nonzero, the function below that is executed. Otherwise, the function is not called. In either case, the two words at the top of the stack are discarded.
 - `EXIT`: terminates the program.
 
