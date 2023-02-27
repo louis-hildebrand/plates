@@ -1,23 +1,16 @@
-use std::io;
-use std::io::Write;
+use crate::reader::read_instructions;
 
 mod lexer;
+mod reader;
 
 fn main() {
     println!("Welcome to the plates REPL!");
     
+    let mut lexer = read_instructions();
     loop {
-        print!("> ");
-        io::stdout().flush().expect("Failed to flush stdout");
-
-        let mut line = String::new();
-        io::stdin()
-            .read_line(&mut line)
-            .expect("Failed to read from stdin");
-
-        match lexer::lex(&line) {
-            Err(msg) => println!("{}", msg),
-            Ok(tokens) => println!("{:#?}", tokens)
+        match lexer.next_token(1) {
+            None => break,
+            Some(t) => println!(" -- {:#?}", t)
         }
     }
 }

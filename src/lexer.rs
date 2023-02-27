@@ -1,3 +1,7 @@
+use std::collections::VecDeque;
+
+use crate::reader::Reader;
+
 #[derive(Debug)]
 pub enum Token {
     Push,
@@ -13,7 +17,63 @@ pub enum Token {
     Whitespace,
 }
 
-pub fn lex(source: &str) -> Result<Vec<Token>, String> {
+pub struct Lexer<T>
+where T: Reader
+{
+    tokens: VecDeque<Token>,
+    reader: T,
+}
+
+impl<T> Lexer<T>
+where T: Reader
+{
+    pub fn new(reader: T) -> Self
+    where T: Reader
+    {
+        Lexer { tokens: VecDeque::new(), reader }
+    }
+
+    pub fn next_token(&mut self, depth: usize) -> Option<Token> {
+        loop {
+            match self.tokens.pop_front() {
+                Some(t) => return Some(t),
+                None => {}
+            }
+
+            if !self.refill_tokens(depth) {
+                return None;
+            }
+        }
+    }
+
+    /// Gets a new line, lexes it, and adds the tokens to self.tokens. If the
+    /// String iterator has no more Strings, returns false. Otherwise, returns
+    /// true. If there is a syntax error, the function will retry as many times
+    /// as necessary.
+    fn refill_tokens(&mut self, depth: usize) -> bool {
+        loop {
+            let line = match self.reader.next_line(depth) {
+                None => return false,
+                Some(x) => x
+            };
+
+            match lex_line(&line) {
+                Err(msg) => {
+                    println!("{}", msg);
+                    continue;
+                },
+                Ok(new_tokens) => {
+                    for nt in new_tokens {
+                        self.tokens.push_back(nt);
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+}
+
+fn lex_line(source: &str) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut my_source = source;
 
