@@ -1,6 +1,6 @@
 # plates
 
-Esoteric, imperative, stack-based programming language.
+plates is an esoteric, imperative, stack-based programming language.
 
 ## Instructions
 
