@@ -1,6 +1,7 @@
 use crate::{lexer::{Token, Lexer}, reader::Reader};
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub enum Instruction {
     PushData(u32),
     PushFunction(String),
@@ -118,6 +119,9 @@ where T: Reader
             Some(Token::FunctionName(f)) => f,
             Some(t) => return Err(format!("Syntax error: unexpected token {:#?}", t)),
         };
+        if func_name.starts_with("__") {
+            return Err(format!("Syntax error: cannot define function '{}' because the prefix __ is reserved for built-in functions.", func_name));
+        }
 
         // Expect curly bracket (with optional whitespace before it)
         match self.next_non_whitespace_token() {

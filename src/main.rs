@@ -1,14 +1,23 @@
-use crate::reader::InteractiveReader;
+use crate::{reader::InteractiveReader, runtime::Runtime};
 
 mod lexer;
 mod parser;
 mod reader;
+mod runtime;
 
 fn main() {
     println!("Welcome to the plates REPL!");
     
     let parser = InteractiveReader::read_instructions();
+    let mut runtime = Runtime::new();
+
     for instruction in parser {
-        println!("{:#?}", instruction);
+        match runtime.execute(instruction) {
+            Err(msg) => println!("{}", msg),
+            Ok(true) => break,
+            Ok(false) => {},
+        }
     }
+
+    println!("Program completed successfully.");
 }
