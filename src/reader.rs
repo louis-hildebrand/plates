@@ -1,7 +1,6 @@
-use std::io;
-use std::io::Write;
+use std::io::{self, Write};
 
-use crate::lexer::Lexer;
+use crate::parser::Parser;
 
 pub trait Reader {
     /// depth starts at zero and increases by one for each unfinished DEFN.
@@ -9,6 +8,13 @@ pub trait Reader {
 }
 
 pub struct InteractiveReader {}
+
+impl InteractiveReader {
+    pub fn read_instructions() -> Parser<Self> {
+        let reader = InteractiveReader { };
+        Parser::new(reader)
+    }
+}
 
 impl Reader for InteractiveReader {
     fn next_line(&mut self, depth: usize) -> Option<String> {
@@ -22,9 +28,4 @@ impl Reader for InteractiveReader {
 
         Some(line)
     }
-}
-
-pub fn read_instructions() -> Lexer<InteractiveReader> {
-    let reader = InteractiveReader { };
-    Lexer::new(reader)
 }
