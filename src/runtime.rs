@@ -108,7 +108,7 @@ impl Runtime {
             Some(body) => body,
         };
 
-        for instruction in body {
+        for instruction in body.iter().rev() {
             self.instruction_stack.push(instruction.clone());
         }
 
