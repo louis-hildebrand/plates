@@ -20,7 +20,7 @@ Functions can be pushed onto the stack and then called. When called, they can mo
 ### Built-in functions
 
 - `__print__`: displays the data words starting at the top of the stack and continuing downwards until it reaches a zero word. Each word is interpreted as a UTF-32. The printed data will remain on the stack.
-- `__input__`: reads one line of input from stdin and places each character onto the stack (with the most recently read character on top). The characters are represented in UTF-32.
+- `__input__`: reads one line of input from stdin and places each character onto the stack (with the first character read on top). The characters are represented in UTF-32.
 - `__swap__`: swaps words. The data word at the top of the stack determines the target of the swap. For example:
     ```
     BEFORE                      AFTER
