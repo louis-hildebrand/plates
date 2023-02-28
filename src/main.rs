@@ -34,7 +34,8 @@ fn main() -> Result<(), Error> {
 fn run_interactive(args: CliArgs) -> Result<(), Error> {
     println!("Welcome to the plates REPL!");
 
-    let mut parser = InteractiveReader::read_instructions();
+    let reader = InteractiveReader::new();
+    let mut parser = parser::Parser::new(reader);
     let mut runtime = Runtime::new();
 
     loop {
@@ -60,10 +61,11 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
 }
 
 fn run_from_files(args: CliArgs) -> Result<(), Error> {
-    let mut parser = match FileReader::read_instructions(args.files) {
+    let reader = match FileReader::new(args.files) {
         Err(e) => return Err(e),
         Ok(parser) => parser,
     };
+    let mut parser = parser::Parser::new(reader);
     let mut runtime = Runtime::new();
 
     loop {

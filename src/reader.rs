@@ -6,8 +6,6 @@ use std::{
 
 use anyhow::{anyhow, Error};
 
-use crate::parser::Parser;
-
 pub trait Reader {
     /// depth starts at zero and increases by one for each unfinished DEFN.
     fn next_line(&mut self, depth: usize) -> Option<String>;
@@ -16,9 +14,8 @@ pub trait Reader {
 pub struct InteractiveReader {}
 
 impl InteractiveReader {
-    pub fn read_instructions() -> Parser<Self> {
-        let reader = InteractiveReader {};
-        Parser::new(reader)
+    pub fn new() -> Self {
+        InteractiveReader {}
     }
 }
 
@@ -41,7 +38,7 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    pub fn read_instructions(files: Vec<PathBuf>) -> Result<Parser<Self>, Error> {
+    pub fn new(files: Vec<PathBuf>) -> Result<Self, Error> {
         let mut combined_file_contents = String::new();
         for file in files {
             let contents = match fs::read_to_string(file) {
@@ -62,7 +59,7 @@ impl FileReader {
         let reader = FileReader {
             file_lines: Box::new(file_lines),
         };
-        Ok(Parser::new(reader))
+        Ok(reader)
     }
 }
 
