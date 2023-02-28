@@ -36,13 +36,13 @@ impl Runtime {
         }
     }
 
-    pub fn show_stack(&mut self) {
+    pub fn stack_to_string(&mut self) -> String {
         let words = self
             .value_stack
             .iter()
             .map(|w| w.to_string())
             .collect::<Vec<_>>();
-        println!("[{}]  <-- top", words.join(", "))
+        format!("[{}]  <-- top", words.join(", "))
     }
 
     /// Returns true iff the program should exit.

@@ -43,20 +43,20 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
             Ok(None) => break,
             Ok(Some(x)) => x,
             Err(e) => {
-                println!("{e}");
+                eprintln!("{e}");
                 parser.clear();
                 continue;
             }
         };
 
         match runtime.run(instruction) {
-            Err(e) => println!("{}", e),
+            Err(e) => eprintln!("{}", e),
             Ok(true) => break,
             Ok(false) => {}
         }
 
         if args.debug {
-            runtime.show_stack();
+            println!("{}", runtime.stack_to_string());
         }
     }
 
@@ -81,7 +81,7 @@ fn run_from_files(args: CliArgs) -> Result<(), Error> {
         }
 
         if args.debug {
-            runtime.show_stack();
+            println!("{}", runtime.stack_to_string())
         }
     }
 
