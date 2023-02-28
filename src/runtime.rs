@@ -1,20 +1,28 @@
 use rand::{Rng, rngs::ThreadRng};
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, fmt::Display};
 
 use crate::{parser::Instruction};
+
+#[derive(Clone)]
+enum Word {
+    Data(u32),
+    Function(String),
+}
+
+impl Display for Word {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Word::Data(n) => write!(formatter, "{n}"),
+            Word::Function(f) => write!(formatter, "function {f}"),
+        }
+    }
+}
 
 pub struct Runtime {
     value_stack: Vec<Word>,
     function_table: HashMap<String, Vec<Instruction>>,
     rng: ThreadRng,
     instruction_stack: Vec<Instruction>,
-}
-
-#[derive(Clone)]
-#[derive(Debug)]
-enum Word {
-    Data(u32),
-    Function(String),
 }
 
 impl Runtime {
@@ -28,7 +36,8 @@ impl Runtime {
     }
 
     pub fn show_stack(&mut self) {
-        println!("{:#?}", self.value_stack);
+        let words = self.value_stack.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        println!("[{}]  <-- top", words.join(", "))
     }
 
     /// Returns true iff the program should exit.

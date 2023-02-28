@@ -17,6 +17,8 @@ fn main() {
             Ok(true) => break,
             Ok(false) => {},
         }
+
+        runtime.show_stack();
     }
 
     println!("Program completed successfully.");
