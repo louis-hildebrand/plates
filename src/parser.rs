@@ -65,7 +65,10 @@ where
                 }
                 None => return Ok(None),
                 Some(Token::Push) => return self.consume_push(),
-                // TODO: Block nested DEFNs?
+                // Block nested DEFNs
+                Some(Token::Defn) if inside_defn => {
+                    return Err(anyhow!("Syntax error: nested definitions are not allowed."))
+                }
                 Some(Token::Defn) => return self.consume_defn(),
                 Some(Token::CallIf) => return Ok(Some(Instruction::CallIf)),
                 Some(Token::Exit) => return Ok(Some(Instruction::Exit)),
