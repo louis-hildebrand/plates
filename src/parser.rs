@@ -74,7 +74,7 @@ where
                 Some(Token::Exit) => return Ok(Some(Instruction::Exit)),
                 Some(Token::Whitespace) => continue,
                 Some(Token::RightCurlyBracket) if inside_defn => return Ok(None),
-                Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+                Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
             }
         }
     }
@@ -83,7 +83,7 @@ where
         // Expect whitespace between PUSH and value
         match self.lexer.next_token(self.depth)? {
             Some(Token::Whitespace) => {}
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
         }
 
@@ -97,7 +97,7 @@ where
             Some(Token::FunctionName(f)) => Instruction::PushFunction(f),
             Some(Token::Caret) => Instruction::PushCopy,
             Some(Token::Asterisk) => Instruction::PushRandom,
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         };
 
         // Reset depth
@@ -106,7 +106,7 @@ where
         // Expect end of file or space between this instruction and the next
         match self.lexer.next_token(self.depth) {
             Ok(None) | Ok(Some(Token::Whitespace)) => Ok(Some(instruction)),
-            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
             Err(e) => Err(e),
         }
     }
@@ -116,7 +116,7 @@ where
         match self.lexer.next_token(self.depth)? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(Token::Whitespace) => {}
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
 
         // Increase depth by 1 in case the whitespace was a newline
@@ -126,7 +126,7 @@ where
         let func_name = match self.next_non_whitespace_token()? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(Token::FunctionName(f)) => f,
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         };
         if func_name.starts_with("__") {
             return Err(anyhow!("Syntax error: cannot define function '{}' because the prefix __ is reserved for built-in functions.", func_name));
@@ -136,7 +136,7 @@ where
         match self.next_non_whitespace_token()? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(Token::LeftCurlyBracket) => {}
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
 
         // Get body
@@ -149,7 +149,7 @@ where
         // Expect end of file or space between this instruction and the next
         match self.lexer.next_token(self.depth) {
             Ok(None) | Ok(Some(Token::Whitespace)) => Ok(Some(instruction)),
-            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:#?}", t)),
+            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
             Err(e) => Err(e),
         }
     }
