@@ -144,7 +144,7 @@ where
 
         // Get body
         let body = match self.consume_defn_body(&func_name) {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok(instructions) => instructions,
         };
         let instruction = Instruction::Define(func_name, body);
@@ -166,7 +166,7 @@ where
             match self.consume_instruction(true, func_name) {
                 Ok(None) => return Ok(body),
                 Ok(Some(instruction)) => body.push(instruction),
-                Err(msg) => return Err(msg),
+                Err(e) => return Err(e),
             }
         }
     }

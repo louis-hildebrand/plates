@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Error};
 use rand::{rngs::ThreadRng, Rng};
 use std::{collections::HashMap, fmt::Display, io::Write};
 
@@ -45,7 +46,7 @@ impl Runtime {
     }
 
     /// Returns true iff the program should exit.
-    pub fn run(&mut self, instruction: Instruction) -> Result<bool, String> {
+    pub fn run(&mut self, instruction: Instruction) -> Result<bool, Error> {
         match instruction {
             Instruction::Exit => Ok(true),
             Instruction::PushData(n) => {
@@ -57,7 +58,7 @@ impl Runtime {
                 Ok(false)
             }
             Instruction::PushCopy => match self.value_stack.last() {
-                None => Err(format!(
+                None => Err(anyhow!(
                     "Runtime error: cannot push copy when the stack is empty."
                 )),
                 Some(w) => {
@@ -78,9 +79,9 @@ impl Runtime {
         }
     }
 
-    fn run_callif(&mut self) -> Result<bool, String> {
+    fn run_callif(&mut self) -> Result<bool, Error> {
         let top_data = match self.pop_data_from_stack() {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok(n) => n,
         };
 
@@ -92,18 +93,18 @@ impl Runtime {
         }
 
         match self.pop_function_from_stack() {
-            Err(msg) => Err(msg),
+            Err(e) => Err(e),
             Ok(f) => self.call_function(&f),
         }
     }
 
-    fn call_function(&mut self, f: &str) -> Result<bool, String> {
+    fn call_function(&mut self, f: &str) -> Result<bool, Error> {
         if f.starts_with("__") {
             return self.call_builtin(f);
         }
 
         let body = match self.function_table.get(f) {
-            None => return Err(format!("Runtime error: function '{}' is not defined.", f)),
+            None => return Err(anyhow!("Runtime error: function '{}' is not defined.", f)),
             Some(body) => body,
         };
 
@@ -116,7 +117,7 @@ impl Runtime {
                 None => return Ok(false),
                 Some(instruction) => {
                     match self.run(instruction) {
-                        Err(msg) => return Err(msg),
+                        Err(e) => return Err(e),
                         Ok(true) => return Ok(true),
                         Ok(false) => {}
                     };
@@ -125,23 +126,23 @@ impl Runtime {
         }
     }
 
-    pub fn call_builtin(&mut self, f: &str) -> Result<bool, String> {
+    pub fn call_builtin(&mut self, f: &str) -> Result<bool, Error> {
         match f {
             "__print__" => self.call_print(),
             "__input__" => self.call_input(),
             "__swap__" => self.call_swap(),
             "__nand__" => self.call_nand(),
-            _ => Err(format!(
+            _ => Err(anyhow!(
                 "Runtime error: unrecognized built-in function '{}'.",
                 f
             )),
         }
     }
 
-    fn call_print(&mut self) -> Result<bool, String> {
+    fn call_print(&mut self) -> Result<bool, Error> {
         loop {
             let n = match self.pop_data_from_stack() {
-                Err(msg) => return Err(msg),
+                Err(e) => return Err(e),
                 Ok(0) => {
                     std::io::stdout().flush().expect("Failed to flush stdout.");
                     return Ok(false);
@@ -150,7 +151,7 @@ impl Runtime {
             };
 
             let c = match char::from_u32(n) {
-                None => return Err(format!("Runtime error: {n} is not a valid code point.")),
+                None => return Err(anyhow!("Runtime error: {n} is not a valid code point.")),
                 Some(c) => c,
             };
 
@@ -158,10 +159,10 @@ impl Runtime {
         }
     }
 
-    fn call_input(&mut self) -> Result<bool, String> {
+    fn call_input(&mut self) -> Result<bool, Error> {
         let mut line = String::new();
         match std::io::stdin().read_line(&mut line) {
-            Err(_) => return Err(String::from("Runtime error: failed to read from stdin.")),
+            Err(_) => return Err(anyhow!("Runtime error: failed to read from stdin.")),
             Ok(_) => {}
         };
 
@@ -173,20 +174,20 @@ impl Runtime {
         Ok(false)
     }
 
-    fn call_swap(&mut self) -> Result<bool, String> {
+    fn call_swap(&mut self) -> Result<bool, Error> {
         let i = match self.pop_data_from_stack() {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok(n) => n,
         };
 
         let i = match i.try_into() {
             Ok(i) => i,
-            Err(_) => return Err(format!("Runtime error: {i} is not a valid index.")),
+            Err(_) => return Err(anyhow!("Runtime error: {i} is not a valid index.")),
         };
 
         let top_index = self.value_stack.len() - 1;
         if top_index < i {
-            return Err(format!(
+            return Err(anyhow!(
                 "Runtime error: cannot swap to index {} in stack of size {}.",
                 i,
                 top_index + 1
@@ -197,14 +198,14 @@ impl Runtime {
         Ok(false)
     }
 
-    fn call_nand(&mut self) -> Result<bool, String> {
+    fn call_nand(&mut self) -> Result<bool, Error> {
         // Use !(a & b)
         let a = match self.pop_data_from_stack() {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok(n) => n,
         };
         let b = match self.pop_data_from_stack() {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok(n) => n,
         };
 
@@ -213,10 +214,10 @@ impl Runtime {
         return Ok(false);
     }
 
-    fn pop_data_from_stack(&mut self) -> Result<u32, String> {
+    fn pop_data_from_stack(&mut self) -> Result<u32, Error> {
         match self.value_stack.pop() {
-            None => Err(format!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Function(f)) => Err(format!(
+            None => Err(anyhow!("Runtime error: cannot pop from empty stack.")),
+            Some(Word::Function(f)) => Err(anyhow!(
                 "Runtime error: expected data but received function '{}'.",
                 f
             )),
@@ -224,10 +225,10 @@ impl Runtime {
         }
     }
 
-    fn pop_function_from_stack(&mut self) -> Result<String, String> {
+    fn pop_function_from_stack(&mut self) -> Result<String, Error> {
         match self.value_stack.pop() {
-            None => Err(format!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Data(n)) => Err(format!(
+            None => Err(anyhow!("Runtime error: cannot pop from empty stack.")),
+            Some(Word::Data(n)) => Err(anyhow!(
                 "Runtime error: expected function but received data '{}'.",
                 n
             )),

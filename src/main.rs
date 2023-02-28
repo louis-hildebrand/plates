@@ -46,7 +46,7 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
         };
 
         match runtime.run(instruction) {
-            Err(msg) => println!("{}", msg),
+            Err(e) => println!("{}", e),
             Ok(true) => break,
             Ok(false) => {}
         }
@@ -76,7 +76,7 @@ fn run_from_files(args: CliArgs) -> Result<(), Error> {
         };
 
         match runtime.run(instruction) {
-            Err(msg) => println!("{}", msg),
+            Err(e) => println!("{}", e),
             Ok(true) => break,
             Ok(false) => {}
         }
