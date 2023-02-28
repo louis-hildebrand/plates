@@ -42,7 +42,11 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
         let instruction = match parser.next_instruction() {
             Ok(None) => break,
             Ok(Some(x)) => x,
-            Err(e) => return Err(e),
+            Err(e) => {
+                println!("{e}");
+                parser.clear();
+                continue;
+            }
         };
 
         match runtime.run(instruction) {
@@ -61,24 +65,19 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
 }
 
 fn run_from_files(args: CliArgs) -> Result<(), Error> {
-    let reader = match FileReader::new(args.files) {
-        Err(e) => return Err(e),
-        Ok(parser) => parser,
-    };
+    let reader = FileReader::new(args.files)?;
     let mut parser = parser::Parser::new(reader);
     let mut runtime = Runtime::new();
 
     loop {
-        let instruction = match parser.next_instruction() {
-            Ok(None) => break,
-            Ok(Some(x)) => x,
-            Err(e) => return Err(e),
+        let instruction = match parser.next_instruction()? {
+            None => break,
+            Some(x) => x,
         };
 
-        match runtime.run(instruction) {
-            Err(e) => println!("{}", e),
-            Ok(true) => break,
-            Ok(false) => {}
+        let should_exit = runtime.run(instruction)?;
+        if should_exit {
+            break;
         }
 
         if args.debug {

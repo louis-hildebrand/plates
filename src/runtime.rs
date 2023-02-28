@@ -80,10 +80,7 @@ impl Runtime {
     }
 
     fn run_callif(&mut self) -> Result<bool, Error> {
-        let top_data = match self.pop_data_from_stack() {
-            Err(e) => return Err(e),
-            Ok(n) => n,
-        };
+        let top_data = self.pop_data_from_stack()?;
 
         if top_data == 0 {
             // TODO: What if there's nothing to pop?
@@ -92,10 +89,8 @@ impl Runtime {
             return Ok(false);
         }
 
-        match self.pop_function_from_stack() {
-            Err(e) => Err(e),
-            Ok(f) => self.call_function(&f),
-        }
+        let f = self.pop_function_from_stack()?;
+        self.call_function(&f)
     }
 
     fn call_function(&mut self, f: &str) -> Result<bool, Error> {
@@ -116,11 +111,9 @@ impl Runtime {
             match self.instruction_stack.pop() {
                 None => return Ok(false),
                 Some(instruction) => {
-                    match self.run(instruction) {
-                        Err(e) => return Err(e),
-                        Ok(true) => return Ok(true),
-                        Ok(false) => {}
-                    };
+                    if self.run(instruction)? {
+                        return Ok(true);
+                    }
                 }
             };
         }
@@ -141,14 +134,15 @@ impl Runtime {
 
     fn call_print(&mut self) -> Result<bool, Error> {
         loop {
-            let n = match self.pop_data_from_stack() {
-                Err(e) => return Err(e),
-                Ok(0) => {
-                    std::io::stdout().flush().expect("Failed to flush stdout.");
-                    return Ok(false);
-                }
-                Ok(n) => n,
-            };
+            let n = self.pop_data_from_stack()?;
+
+            if n == 0 {
+                match std::io::stdout().flush() {
+                    Err(_) => return Err(anyhow!("Failed to flush stdout.")),
+                    Ok(_) => {}
+                };
+                return Ok(false);
+            }
 
             let c = match char::from_u32(n) {
                 None => return Err(anyhow!("Runtime error: {n} is not a valid code point.")),
@@ -175,10 +169,7 @@ impl Runtime {
     }
 
     fn call_swap(&mut self) -> Result<bool, Error> {
-        let i = match self.pop_data_from_stack() {
-            Err(e) => return Err(e),
-            Ok(n) => n,
-        };
+        let i = self.pop_data_from_stack()?;
 
         let i = match i.try_into() {
             Ok(i) => i,
@@ -200,14 +191,8 @@ impl Runtime {
 
     fn call_nand(&mut self) -> Result<bool, Error> {
         // Use !(a & b)
-        let a = match self.pop_data_from_stack() {
-            Err(e) => return Err(e),
-            Ok(n) => n,
-        };
-        let b = match self.pop_data_from_stack() {
-            Err(e) => return Err(e),
-            Ok(n) => n,
-        };
+        let a = self.pop_data_from_stack()?;
+        let b = self.pop_data_from_stack()?;
 
         let result = !(a & b);
         self.value_stack.push(Word::Data(result));

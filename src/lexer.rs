@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Context, Error};
 
 use crate::reader::Reader;
 
@@ -41,6 +41,11 @@ where
         }
     }
 
+    /// Discards any remaining tokens that were already lexed.
+    pub fn clear(&mut self) {
+        self.tokens.clear();
+    }
+
     pub fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
         loop {
             match self.tokens.pop_front() {
@@ -48,10 +53,8 @@ where
                 None => {}
             }
 
-            match self.refill_tokens(depth) {
-                Err(e) => return Err(e),
-                Ok(false) => return Ok(None),
-                Ok(true) => continue,
+            if !self.refill_tokens(depth)? {
+                return Ok(None);
             }
         }
     }
@@ -65,15 +68,11 @@ where
                 Some(x) => x,
             };
 
-            match lex_line(&line) {
-                Err(e) => return Err(e),
-                Ok(new_tokens) => {
-                    for nt in new_tokens {
-                        self.tokens.push_back(nt);
-                    }
-                    return Ok(true);
-                }
+            let new_tokens = lex_line(&line)?;
+            for nt in new_tokens {
+                self.tokens.push_back(nt);
             }
+            return Ok(true);
         }
     }
 }
@@ -83,9 +82,8 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
     let mut my_source = source;
 
     loop {
-        match consume_token(my_source) {
-            Err(e) => return Err(e),
-            Ok((None, _)) => {
+        match consume_token(my_source)? {
+            (None, _) => {
                 // Add whitespace at the end of the line in case the reader
                 // trims newlines
                 match tokens.last() {
@@ -94,7 +92,7 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
                 };
                 return Ok(tokens);
             }
-            Ok((Some(Token::Whitespace), updated_source)) => {
+            (Some(Token::Whitespace), updated_source) => {
                 // Combine whitespace
                 match tokens.last() {
                     Some(Token::Whitespace) => {}
@@ -104,7 +102,7 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
                 }
                 my_source = updated_source;
             }
-            Ok((Some(token), updated_source)) => {
+            (Some(token), updated_source) => {
                 tokens.push(token);
                 my_source = updated_source;
             }
@@ -167,11 +165,9 @@ fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
         }
     }
 
-    // TODO: Try unwrapping with ? here
-    let n = match source[..i].parse::<u32>() {
-        Ok(m) => m,
-        Err(_) => return Err(anyhow!("Syntax error: invalid word '{}'.", &source[..i])),
-    };
+    let n = source[..i]
+        .parse::<u32>()
+        .with_context(|| format!("Syntax error: invalid word '{}'.", &source[..i]))?;
 
     Ok((Some(Token::Word(n)), &source[i..]))
 }
