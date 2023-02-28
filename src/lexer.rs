@@ -86,7 +86,15 @@ fn lex_line(source: &str) -> Result<Vec<Token>, String> {
     loop {
         match consume_token(my_source) {
             Err(msg) => return Err(msg),
-            Ok((None, _)) => return Ok(tokens),
+            Ok((None, _)) => {
+                // Add whitespace at the end of the line in case the reader
+                // trims newlines
+                match tokens.last() {
+                    Some(Token::Whitespace) => {},
+                    _ => tokens.push(Token::Whitespace)
+                };
+                return Ok(tokens);
+            }
             Ok((Some(Token::Whitespace), updated_source)) => {
                 // Combine whitespace
                 match tokens.last() {
