@@ -11,7 +11,7 @@ pub struct InteractiveReader {}
 
 impl InteractiveReader {
     pub fn read_instructions() -> Parser<Self> {
-        let reader = InteractiveReader { };
+        let reader = InteractiveReader {};
         Parser::new(reader)
     }
 }

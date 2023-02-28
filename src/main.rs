@@ -26,7 +26,7 @@ fn main() {
         match runtime.run(instruction) {
             Err(msg) => println!("{}", msg),
             Ok(true) => break,
-            Ok(false) => {},
+            Ok(false) => {}
         }
 
         if args.debug {

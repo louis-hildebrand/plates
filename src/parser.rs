@@ -1,7 +1,9 @@
-use crate::{lexer::{Token, Lexer}, reader::Reader};
+use crate::{
+    lexer::{Lexer, Token},
+    reader::Reader,
+};
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Instruction {
     PushData(u32),
     PushFunction(String),
@@ -13,14 +15,16 @@ pub enum Instruction {
 }
 
 pub struct Parser<T>
-where T: Reader
+where
+    T: Reader,
 {
     lexer: Lexer<T>,
     depth: usize,
 }
 
 impl<T> Iterator for Parser<T>
-where T: Reader
+where
+    T: Reader,
 {
     type Item = Instruction;
 
@@ -35,7 +39,7 @@ where T: Reader
                     // of a definition or something
                     self.depth = 0;
                     continue;
-                },
+                }
                 Ok(None) => return None,
                 Ok(instruction) => return instruction,
             }
@@ -44,29 +48,36 @@ where T: Reader
 }
 
 impl<T> Parser<T>
-where T: Reader
+where
+    T: Reader,
 {
     pub fn new(reader: T) -> Self {
         let lexer = Lexer::new(reader);
         Parser { lexer, depth: 0 }
     }
 
-    fn consume_instruction(&mut self, inside_defn: bool, func_name: &str) -> Result<Option<Instruction>, String> {
+    fn consume_instruction(
+        &mut self,
+        inside_defn: bool,
+        func_name: &str,
+    ) -> Result<Option<Instruction>, String> {
         loop {
             match self.lexer.next_token(self.depth) {
                 None if !inside_defn => return Ok(None),
                 None if inside_defn => {
-                    return Err(
-                        format!("Syntax error: reached end of file with unfinished definition for '{}'.", func_name)
-                    );
-                },
+                    return Err(format!(
+                        "Syntax error: reached end of file with unfinished definition for '{}'.",
+                        func_name
+                    ));
+                }
                 Some(Token::Push) => return self.consume_push(),
+                // TODO: Block nested DEFNs?
                 Some(Token::Defn) => return self.consume_defn(),
                 Some(Token::CallIf) => return Ok(Some(Instruction::CallIf)),
                 Some(Token::Exit) => return Ok(Some(Instruction::Exit)),
                 Some(Token::Whitespace) => continue,
                 Some(Token::RightCurlyBracket) if inside_defn => return Ok(None),
-                t => return Err(format!("Syntax error: unexpected token {:#?}", t))
+                t => return Err(format!("Syntax error: unexpected token {:#?}", t)),
             }
         }
     }
@@ -74,7 +85,7 @@ where T: Reader
     fn consume_push(&mut self) -> Result<Option<Instruction>, String> {
         // Expect whitespace between PUSH and value
         match self.lexer.next_token(self.depth) {
-            Some(Token::Whitespace) => {},
+            Some(Token::Whitespace) => {}
             Some(t) => return Err(format!("Syntax error: unexpected token {:#?}", t)),
             None => return Err(String::from("Syntax error: unexpected end of file.")),
         }
@@ -106,7 +117,7 @@ where T: Reader
         // Expect whitespace between DEFN and function name
         match self.lexer.next_token(self.depth) {
             None => return Err(String::from("Syntax error: unexpected end of file.")),
-            Some(Token::Whitespace) => {},
+            Some(Token::Whitespace) => {}
             Some(t) => return Err(format!("Syntax error: unexpected token {:#?}", t)),
         }
 
@@ -126,7 +137,7 @@ where T: Reader
         // Expect curly bracket (with optional whitespace before it)
         match self.next_non_whitespace_token() {
             None => return Err(String::from("Syntax error: unexpected end of file.")),
-            Some(Token::LeftCurlyBracket) => {},
+            Some(Token::LeftCurlyBracket) => {}
             Some(t) => return Err(format!("Syntax error: unexpected token {:#?}", t)),
         }
 

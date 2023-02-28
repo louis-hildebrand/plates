@@ -1,7 +1,7 @@
-use rand::{Rng, rngs::ThreadRng};
-use std::{collections::HashMap, io::Write, fmt::Display};
+use rand::{rngs::ThreadRng, Rng};
+use std::{collections::HashMap, fmt::Display, io::Write};
 
-use crate::{parser::Instruction};
+use crate::parser::Instruction;
 
 #[derive(Clone)]
 enum Word {
@@ -36,47 +36,45 @@ impl Runtime {
     }
 
     pub fn show_stack(&mut self) {
-        let words = self.value_stack.iter().map(|w| w.to_string()).collect::<Vec<_>>();
+        let words = self
+            .value_stack
+            .iter()
+            .map(|w| w.to_string())
+            .collect::<Vec<_>>();
         println!("[{}]  <-- top", words.join(", "))
     }
 
     /// Returns true iff the program should exit.
     pub fn run(&mut self, instruction: Instruction) -> Result<bool, String> {
         match instruction {
-            Instruction::Exit => {
-                Ok(true)
-            },
+            Instruction::Exit => Ok(true),
             Instruction::PushData(n) => {
                 self.value_stack.push(Word::Data(n));
                 Ok(false)
-            },
+            }
             Instruction::PushFunction(f) => {
                 self.value_stack.push(Word::Function(f));
                 Ok(false)
-            },
-            Instruction::PushCopy => {
-                match self.value_stack.last() {
-                    None => {
-                        Err(format!("Runtime error: cannot push copy when the stack is empty."))
-                    },
-                    Some(w) => {
-                        self.value_stack.push(w.clone());
-                        Ok(false)
-                    }
+            }
+            Instruction::PushCopy => match self.value_stack.last() {
+                None => Err(format!(
+                    "Runtime error: cannot push copy when the stack is empty."
+                )),
+                Some(w) => {
+                    self.value_stack.push(w.clone());
+                    Ok(false)
                 }
             },
             Instruction::PushRandom => {
                 let n = self.rng.gen();
                 self.value_stack.push(Word::Data(n));
                 Ok(false)
-            },
+            }
             Instruction::Define(f, body) => {
                 self.function_table.insert(f, body);
                 Ok(false)
-            },
-            Instruction::CallIf => {
-                self.run_callif()
             }
+            Instruction::CallIf => self.run_callif(),
         }
     }
 
@@ -88,6 +86,7 @@ impl Runtime {
 
         if top_data == 0 {
             // TODO: What if there's nothing to pop?
+            // In general, be more clear about the state of the stack after a runtime error.
             self.value_stack.pop();
             return Ok(false);
         }
@@ -119,9 +118,9 @@ impl Runtime {
                     match self.run(instruction) {
                         Err(msg) => return Err(msg),
                         Ok(true) => return Ok(true),
-                        Ok(false) => {},
+                        Ok(false) => {}
                     };
-                },
+                }
             };
         }
     }
@@ -132,7 +131,10 @@ impl Runtime {
             "__input__" => self.call_input(),
             "__swap__" => self.call_swap(),
             "__nand__" => self.call_nand(),
-            _ => Err(format!("Runtime error: unrecognized built-in function '{}'.", f)),
+            _ => Err(format!(
+                "Runtime error: unrecognized built-in function '{}'.",
+                f
+            )),
         }
     }
 
@@ -143,7 +145,7 @@ impl Runtime {
                 Ok(0) => {
                     std::io::stdout().flush().expect("Failed to flush stdout.");
                     return Ok(false);
-                },
+                }
                 Ok(n) => n,
             };
 
@@ -160,7 +162,7 @@ impl Runtime {
         let mut line = String::new();
         match std::io::stdin().read_line(&mut line) {
             Err(_) => return Err(String::from("Runtime error: failed to read from stdin.")),
-            Ok(_) => {},
+            Ok(_) => {}
         };
 
         for c in line.chars().rev() {
@@ -184,7 +186,11 @@ impl Runtime {
 
         let top_index = self.value_stack.len() - 1;
         if top_index < i {
-            return Err(format!("Runtime error: cannot swap to index {} in stack of size {}.", i, top_index + 1));
+            return Err(format!(
+                "Runtime error: cannot swap to index {} in stack of size {}.",
+                i,
+                top_index + 1
+            ));
         }
 
         self.value_stack.swap(top_index, top_index - i);
@@ -210,8 +216,10 @@ impl Runtime {
     fn pop_data_from_stack(&mut self) -> Result<u32, String> {
         match self.value_stack.pop() {
             None => Err(format!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Function(f)) =>
-                Err(format!("Runtime error: expected data but received function '{}'.", f)),
+            Some(Word::Function(f)) => Err(format!(
+                "Runtime error: expected data but received function '{}'.",
+                f
+            )),
             Some(Word::Data(n)) => Ok(n),
         }
     }
@@ -219,7 +227,10 @@ impl Runtime {
     fn pop_function_from_stack(&mut self) -> Result<String, String> {
         match self.value_stack.pop() {
             None => Err(format!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Data(n)) => Err(format!("Runtime error: expected function but received data '{}'.", n)),
+            Some(Word::Data(n)) => Err(format!(
+                "Runtime error: expected function but received data '{}'.",
+                n
+            )),
             Some(Word::Function(f)) => Ok(f),
         }
     }
