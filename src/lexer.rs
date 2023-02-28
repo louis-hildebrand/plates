@@ -1,5 +1,7 @@
 use std::collections::VecDeque;
 
+use anyhow::{anyhow, Error};
+
 use crate::reader::Reader;
 
 #[derive(Debug)]
@@ -39,59 +41,56 @@ where
         }
     }
 
-    pub fn next_token(&mut self, depth: usize) -> Option<Token> {
+    pub fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
         loop {
             match self.tokens.pop_front() {
-                Some(t) => return Some(t),
+                Some(t) => return Ok(Some(t)),
                 None => {}
             }
 
-            if !self.refill_tokens(depth) {
-                return None;
+            match self.refill_tokens(depth) {
+                Err(e) => return Err(e),
+                Ok(false) => return Ok(None),
+                Ok(true) => continue,
             }
         }
     }
 
     /// Gets a new line, lexes it, and adds the tokens to self.tokens. If the
-    /// String iterator has no more Strings, returns false. Otherwise, returns
-    /// true. If there is a syntax error, the function will retry as many times
-    /// as necessary.
-    fn refill_tokens(&mut self, depth: usize) -> bool {
+    /// reader has no more lines, returns false. Otherwise, returns true.
+    fn refill_tokens(&mut self, depth: usize) -> Result<bool, Error> {
         loop {
             let line = match self.reader.next_line(depth) {
-                None => return false,
+                None => return Ok(false),
                 Some(x) => x,
             };
 
             match lex_line(&line) {
-                Err(msg) => {
-                    println!("{}", msg);
-                    continue;
-                }
+                Err(e) => return Err(e),
                 Ok(new_tokens) => {
                     for nt in new_tokens {
                         self.tokens.push_back(nt);
                     }
-                    return true;
+                    return Ok(true);
                 }
             }
         }
     }
 }
 
-fn lex_line(source: &str) -> Result<Vec<Token>, String> {
+fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
     let mut tokens = Vec::new();
     let mut my_source = source;
 
     loop {
         match consume_token(my_source) {
-            Err(msg) => return Err(msg),
+            Err(e) => return Err(e),
             Ok((None, _)) => {
                 // Add whitespace at the end of the line in case the reader
                 // trims newlines
                 match tokens.last() {
-                    Some(Token::Whitespace) => {},
-                    _ => tokens.push(Token::Whitespace)
+                    Some(Token::Whitespace) => {}
+                    _ => tokens.push(Token::Whitespace),
                 };
                 return Ok(tokens);
             }
@@ -113,7 +112,7 @@ fn lex_line(source: &str) -> Result<Vec<Token>, String> {
     }
 }
 
-fn consume_token(source: &str) -> Result<(Option<Token>, &str), String> {
+fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
     match source.chars().nth(0) {
         None => Ok((None, source)),
         _ if source.starts_with("PUSH") => Ok((Some(Token::Push), &source[4..])),
@@ -129,11 +128,11 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), String> {
         // TODO: support different types (hexadecimal, binary, octal, character)
         Some(c) if c.is_ascii_digit() => consume_word(source),
         Some(c) if c.is_whitespace() => consume_whitespace(source),
-        Some(c) => Err(format!("Syntax error: unexpected character '{c}'.")),
+        Some(c) => Err(anyhow!("Syntax error: unexpected character '{c}'.")),
     }
 }
 
-fn consume_comment(source: &str) -> Result<(Option<Token>, &str), String> {
+fn consume_comment(source: &str) -> Result<(Option<Token>, &str), Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -146,7 +145,7 @@ fn consume_comment(source: &str) -> Result<(Option<Token>, &str), String> {
     }
 }
 
-fn consume_whitespace(source: &str) -> Result<(Option<Token>, &str), String> {
+fn consume_whitespace(source: &str) -> Result<(Option<Token>, &str), Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -158,7 +157,7 @@ fn consume_whitespace(source: &str) -> Result<(Option<Token>, &str), String> {
     Ok((Some(Token::Whitespace), &source[i..]))
 }
 
-fn consume_word(source: &str) -> Result<(Option<Token>, &str), String> {
+fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -167,14 +166,17 @@ fn consume_word(source: &str) -> Result<(Option<Token>, &str), String> {
             _ => i += 1,
         }
     }
+
+    // TODO: Try unwrapping with ? here
     let n = match source[..i].parse::<u32>() {
         Ok(m) => m,
-        Err(_) => return Err(format!("Syntax error: invalid word '{}'.", &source[..i])),
+        Err(_) => return Err(anyhow!("Syntax error: invalid word '{}'.", &source[..i])),
     };
+
     Ok((Some(Token::Word(n)), &source[i..]))
 }
 
-fn consume_function_name(source: &str) -> Result<(Option<Token>, &str), String> {
+fn consume_function_name(source: &str) -> Result<(Option<Token>, &str), Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -183,6 +185,7 @@ fn consume_function_name(source: &str) -> Result<(Option<Token>, &str), String> 
             _ => i += 1,
         }
     }
+
     Ok((
         Some(Token::FunctionName(source[..i].to_string())),
         &source[i..],

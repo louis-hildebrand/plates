@@ -1,3 +1,4 @@
+use anyhow::Error;
 use clap::Parser;
 
 use crate::{
@@ -20,23 +21,29 @@ struct CliArgs {
     debug: bool,
 }
 
-fn main() {
+fn main() -> Result<(), Error> {
     let args = CliArgs::parse();
 
     if args.files.len() == 0 {
-        run_interactive(args);
+        run_interactive(args)
     } else {
-        run_from_files(args);
+        run_from_files(args)
     }
 }
 
-fn run_interactive(args: CliArgs) {
+fn run_interactive(args: CliArgs) -> Result<(), Error> {
     println!("Welcome to the plates REPL!");
 
-    let parser = InteractiveReader::read_instructions();
+    let mut parser = InteractiveReader::read_instructions();
     let mut runtime = Runtime::new();
 
-    for instruction in parser {
+    loop {
+        let instruction = match parser.next_instruction() {
+            Ok(None) => break,
+            Ok(Some(x)) => x,
+            Err(e) => return Err(e),
+        };
+
         match runtime.run(instruction) {
             Err(msg) => println!("{}", msg),
             Ok(true) => break,
@@ -49,19 +56,23 @@ fn run_interactive(args: CliArgs) {
     }
 
     println!("Program completed successfully.");
+    Ok(())
 }
 
-fn run_from_files(args: CliArgs) {
-    let parser = match FileReader::read_instructions(args.files) {
-        Err(msg) => {
-            println!("{}", msg);
-            return;
-        }
+fn run_from_files(args: CliArgs) -> Result<(), Error> {
+    let mut parser = match FileReader::read_instructions(args.files) {
+        Err(e) => return Err(e),
         Ok(parser) => parser,
     };
     let mut runtime = Runtime::new();
 
-    for instruction in parser {
+    loop {
+        let instruction = match parser.next_instruction() {
+            Ok(None) => break,
+            Ok(Some(x)) => x,
+            Err(e) => return Err(e),
+        };
+
         match runtime.run(instruction) {
             Err(msg) => println!("{}", msg),
             Ok(true) => break,
@@ -74,4 +85,5 @@ fn run_from_files(args: CliArgs) {
     }
 
     println!("Program completed successfully.");
+    Ok(())
 }

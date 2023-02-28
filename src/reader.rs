@@ -4,6 +4,8 @@ use std::{
     path::PathBuf,
 };
 
+use anyhow::{anyhow, Error};
+
 use crate::parser::Parser;
 
 pub trait Reader {
@@ -39,11 +41,11 @@ pub struct FileReader {
 }
 
 impl FileReader {
-    pub fn read_instructions(files: Vec<PathBuf>) -> Result<Parser<Self>, String> {
+    pub fn read_instructions(files: Vec<PathBuf>) -> Result<Parser<Self>, Error> {
         let mut combined_file_contents = String::new();
         for file in files {
             let contents = match fs::read_to_string(file) {
-                Err(e) => return Err(format!("Failed to read file. Error: {}", e.to_string())),
+                Err(e) => return Err(anyhow!(e).context("Failed to read file.")),
                 Ok(s) => s,
             };
             combined_file_contents = combined_file_contents + "\n" + &contents;
