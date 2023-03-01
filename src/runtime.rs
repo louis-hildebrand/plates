@@ -169,22 +169,23 @@ impl Runtime {
     }
 
     fn call_swap(&mut self) -> Result<bool, Error> {
-        let i = self.pop_data_from_stack()?;
+        let idx_u32 = self.pop_data_from_stack()?;
 
-        let i = match i.try_into() {
+        let i: usize = match idx_u32.try_into() {
             Ok(i) => i,
-            Err(_) => return Err(anyhow!("Runtime error: {i} is not a valid index.")),
+            Err(_) => return Err(anyhow!("Runtime error: {idx_u32} is not a valid index.")),
         };
 
-        let top_index = self.value_stack.len() - 1;
-        if top_index < i {
+        let stack_size = self.value_stack.len();
+        if i >= stack_size {
             return Err(anyhow!(
                 "Runtime error: cannot swap to index {} in stack of size {}.",
                 i,
-                top_index + 1
+                stack_size
             ));
         }
 
+        let top_index = stack_size - 1;
         self.value_stack.swap(top_index, top_index - i);
         Ok(false)
     }
