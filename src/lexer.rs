@@ -117,7 +117,9 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
         _ if source.starts_with("DEFN") => Ok((Some(Token::Defn), &source[4..])),
         _ if source.starts_with("CALLIF") => Ok((Some(Token::CallIf), &source[6..])),
         _ if source.starts_with("EXIT") => Ok((Some(Token::Exit), &source[4..])),
-        _ if source.starts_with("//") => consume_comment(source),
+        // Immediately return None because the comment extends all the way until
+        // the end of the line
+        _ if source.starts_with("//") => Ok((None, source)),
         Some('^') => Ok((Some(Token::Caret), &source[1..])),
         Some('*') => Ok((Some(Token::Asterisk), &source[1..])),
         Some('{') => Ok((Some(Token::LeftCurlyBracket), &source[1..])),
@@ -127,19 +129,6 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
         Some(c) if c.is_ascii_digit() => consume_word(source),
         Some(c) if c.is_whitespace() => consume_whitespace(source),
         Some(c) => Err(anyhow!("Syntax error: unexpected character '{c}'.")),
-    }
-}
-
-fn consume_comment(source: &str) -> Result<(Option<Token>, &str), Error> {
-    let mut i = 1;
-    loop {
-        match source.chars().nth(i) {
-            // Replace comment with whitespace
-            None | Some('\n') => return Ok((Some(Token::Whitespace), &source[i + 1..])),
-            _ => {
-                i += 1;
-            }
-        }
     }
 }
 
