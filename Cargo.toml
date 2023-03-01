@@ -1,5 +1,5 @@
 [package]
-name = "plates"
+name = "plates-lang"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,7 @@ edition = "2021"
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 rand = "0.8"
+
+[[bin]]
+name = "plates"
+path = "src/main.rs"
