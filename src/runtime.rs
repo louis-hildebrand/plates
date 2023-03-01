@@ -52,11 +52,14 @@ impl Runtime {
         loop {
             match self.instruction_stack.pop() {
                 None => return Ok(false),
-                Some(instruction) => {
-                    if self.run_instruction(instruction)? {
-                        return Ok(true);
+                Some(instruction) => match self.run_instruction(instruction) {
+                    Err(e) => {
+                        self.instruction_stack.clear();
+                        return Err(e);
                     }
-                }
+                    Ok(true) => return Ok(true),
+                    Ok(false) => continue,
+                },
             };
         }
     }
