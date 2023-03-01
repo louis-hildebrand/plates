@@ -47,36 +47,63 @@ impl Runtime {
 
     /// Returns true iff the program should exit.
     pub fn run(&mut self, instruction: Instruction) -> Result<bool, Error> {
+        self.instruction_stack.push(instruction);
+
+        loop {
+            match self.instruction_stack.pop() {
+                None => return Ok(false),
+                Some(instruction) => {
+                    if self.run_instruction(instruction)? {
+                        return Ok(true);
+                    }
+                }
+            };
+        }
+    }
+
+    fn run_instruction(&mut self, instruction: Instruction) -> Result<bool, Error> {
         match instruction {
             Instruction::Exit => Ok(true),
-            Instruction::PushData(n) => {
-                self.value_stack.push(Word::Data(n));
-                Ok(false)
-            }
-            Instruction::PushFunction(f) => {
-                self.value_stack.push(Word::Function(f));
-                Ok(false)
-            }
-            Instruction::PushCopy => match self.value_stack.last() {
-                None => Err(anyhow!(
-                    "Runtime error: cannot push copy when the stack is empty."
-                )),
-                Some(w) => {
-                    self.value_stack.push(w.clone());
-                    Ok(false)
-                }
-            },
-            Instruction::PushRandom => {
-                let n = self.rng.gen();
-                self.value_stack.push(Word::Data(n));
-                Ok(false)
-            }
-            Instruction::Define(f, body) => {
-                self.function_table.insert(f, body);
-                Ok(false)
-            }
+            Instruction::PushData(n) => self.run_pushdata(n),
+            Instruction::PushFunction(f) => self.run_pushfunction(f),
+            Instruction::PushCopy => self.run_pushcopy(),
+            Instruction::PushRandom => self.run_pushrandom(),
+            Instruction::Define(f, body) => self.run_define(f, body),
             Instruction::CallIf => self.run_callif(),
         }
+    }
+
+    fn run_pushdata(&mut self, n: u32) -> Result<bool, Error> {
+        self.value_stack.push(Word::Data(n));
+        Ok(false)
+    }
+
+    fn run_pushfunction(&mut self, f: String) -> Result<bool, Error> {
+        self.value_stack.push(Word::Function(f));
+        Ok(false)
+    }
+
+    fn run_pushcopy(&mut self) -> Result<bool, Error> {
+        match self.value_stack.last() {
+            None => Err(anyhow!(
+                "Runtime error: cannot push copy when the stack is empty."
+            )),
+            Some(w) => {
+                self.value_stack.push(w.clone());
+                Ok(false)
+            }
+        }
+    }
+
+    fn run_pushrandom(&mut self) -> Result<bool, Error> {
+        let n = self.rng.gen();
+        self.value_stack.push(Word::Data(n));
+        Ok(false)
+    }
+
+    fn run_define(&mut self, f: String, body: Vec<Instruction>) -> Result<bool, Error> {
+        self.function_table.insert(f, body);
+        Ok(false)
     }
 
     fn run_callif(&mut self) -> Result<bool, Error> {
@@ -107,16 +134,7 @@ impl Runtime {
             self.instruction_stack.push(instruction.clone());
         }
 
-        loop {
-            match self.instruction_stack.pop() {
-                None => return Ok(false),
-                Some(instruction) => {
-                    if self.run(instruction)? {
-                        return Ok(true);
-                    }
-                }
-            };
-        }
+        Ok(false)
     }
 
     pub fn call_builtin(&mut self, f: &str) -> Result<bool, Error> {
