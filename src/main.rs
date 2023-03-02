@@ -1,5 +1,6 @@
 use anyhow::Error;
 use clap::Parser;
+use colored::Colorize;
 
 use crate::{
     reader::{FileReader, InteractiveReader},
@@ -21,18 +22,18 @@ struct CliArgs {
     debug: bool,
 }
 
-fn main() -> Result<(), Error> {
+fn main() {
     let args = CliArgs::parse();
 
     if args.files.len() == 0 {
-        run_interactive(args)
+        run_interactive(args);
     } else {
-        run_from_files(args)
+        run_from_files(args);
     }
 }
 
-fn run_interactive(args: CliArgs) -> Result<(), Error> {
-    println!("Welcome to the plates REPL!");
+fn run_interactive(args: CliArgs) {
+    print_info("Welcome to the plates REPL!");
 
     let reader = InteractiveReader::new();
     let mut parser = parser::Parser::new(reader);
@@ -43,48 +44,79 @@ fn run_interactive(args: CliArgs) -> Result<(), Error> {
             Ok(None) => break,
             Ok(Some(x)) => x,
             Err(e) => {
-                eprintln!("{e}");
+                print_error(&e);
                 parser.clear();
                 continue;
             }
         };
 
         match runtime.run(instruction) {
-            Err(e) => eprintln!("{}", e),
+            Err(e) => print_error(&e),
             Ok(true) => break,
             Ok(false) => {}
         }
 
         if args.debug {
-            println!("{}", runtime.stack_to_string());
+            print_debug(&runtime.stack_to_string());
         }
     }
 
-    println!("Program completed successfully.");
-    Ok(())
+    print_info("Program completed successfully.");
 }
 
-fn run_from_files(args: CliArgs) -> Result<(), Error> {
-    let reader = FileReader::new(args.files)?;
+fn run_from_files(args: CliArgs) {
+    let reader = match FileReader::new(args.files) {
+        Err(e) => {
+            print_error(&e);
+            return;
+        }
+        Ok(r) => r,
+    };
     let mut parser = parser::Parser::new(reader);
     let mut runtime = Runtime::new();
 
     loop {
-        let instruction = match parser.next_instruction()? {
-            None => break,
-            Some(x) => x,
+        let instruction = match parser.next_instruction() {
+            Err(e) => {
+                print_error(&e);
+                return;
+            }
+            Ok(None) => break,
+            Ok(Some(x)) => x,
         };
 
-        let should_exit = runtime.run(instruction)?;
+        let should_exit = match runtime.run(instruction) {
+            Err(e) => {
+                print_error(&e);
+                return;
+            }
+            Ok(x) => x,
+        };
         if should_exit {
             break;
         }
 
         if args.debug {
-            println!("{}", runtime.stack_to_string())
+            print_debug(&runtime.stack_to_string());
         }
     }
 
-    println!("Program completed successfully.");
-    Ok(())
+    print_info("Program completed successfully.");
+}
+
+fn print_error(e: &Error) {
+    let mut msg = format!("{e}");
+    for cause in e.chain().skip(1) {
+        msg += &format!("\n\nCaused by:\n    {cause}");
+    }
+
+    eprintln!("{}", msg.bold().red());
+}
+
+fn print_info(msg: &str) {
+    println!("{}", msg.bold());
+}
+
+fn print_debug(msg: &str) {
+    println!("{}", msg.italic().truecolor(128, 128, 128));
 }
