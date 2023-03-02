@@ -50,6 +50,10 @@ where
         self.lexer.clear();
     }
 
+    pub fn full_line_consumed(&mut self) -> bool {
+        self.lexer.full_line_consumed()
+    }
+
     fn consume_instruction(
         &mut self,
         inside_defn: bool,
@@ -70,7 +74,7 @@ where
                     return Err(anyhow!("Syntax error: nested definitions are not allowed."))
                 }
                 Some(Token::Defn) => return self.consume_defn(),
-                Some(Token::CallIf) => return Ok(Some(Instruction::CallIf)),
+                Some(Token::CallIf) => return self.consume_callif(),
                 Some(Token::Exit) => return Ok(Some(Instruction::Exit)),
                 Some(Token::Whitespace) => continue,
                 Some(Token::RightCurlyBracket) if inside_defn => return Ok(None),
@@ -103,11 +107,10 @@ where
         // Reset depth
         self.depth -= 1;
 
-        // Expect end of file or space between this instruction and the next
-        match self.lexer.next_token(self.depth) {
-            Ok(None) | Ok(Some(Token::Whitespace)) => Ok(Some(instruction)),
-            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
-            Err(e) => Err(e),
+        // Expect end of file or whitespace between this instruction and the next
+        match self.lexer.next_token(self.depth)? {
+            None | Some(Token::Whitespace) => Ok(Some(instruction)),
+            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
     }
 
@@ -146,11 +149,10 @@ where
         // Reset depth
         self.depth -= 1;
 
-        // Expect end of file or space between this instruction and the next
-        match self.lexer.next_token(self.depth) {
-            Ok(None) | Ok(Some(Token::Whitespace)) => Ok(Some(instruction)),
-            Ok(Some(t)) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
-            Err(e) => Err(e),
+        // Expect end of file or whitespace between this instruction and the next
+        match self.lexer.next_token(self.depth)? {
+            None | Some(Token::Whitespace) => Ok(Some(instruction)),
+            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
     }
 
@@ -161,6 +163,14 @@ where
                 None => return Ok(body),
                 Some(instruction) => body.push(instruction),
             }
+        }
+    }
+
+    fn consume_callif(&mut self) -> Result<Option<Instruction>, Error> {
+        // Expect end of file or whitespace between this instruction and the next
+        match self.lexer.next_token(self.depth)? {
+            None | Some(Token::Whitespace) => Ok(Some(Instruction::CallIf)),
+            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
     }
 

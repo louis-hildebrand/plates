@@ -46,6 +46,12 @@ where
         self.tokens.clear();
     }
 
+    /// Returns true if a new line has been read since the last time this
+    /// function was called and all its tokens have been returned.
+    pub fn full_line_consumed(&mut self) -> bool {
+        self.tokens.len() == 0
+    }
+
     pub fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
         loop {
             match self.tokens.pop_front() {

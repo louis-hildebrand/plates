@@ -40,23 +40,21 @@ fn run_interactive(args: CliArgs) {
     let mut runtime = Runtime::new();
 
     loop {
-        let instruction = match parser.next_instruction() {
+        match parser.next_instruction() {
             Ok(None) => break,
-            Ok(Some(x)) => x,
+            Ok(Some(instruction)) => match runtime.run(instruction) {
+                Err(e) => print_error(&e),
+                Ok(true) => break,
+                Ok(false) => {}
+            },
             Err(e) => {
                 print_error(&e);
                 parser.clear();
-                continue;
             }
         };
 
-        match runtime.run(instruction) {
-            Err(e) => print_error(&e),
-            Ok(true) => break,
-            Ok(false) => {}
-        }
-
-        if args.debug {
+        // Only show stack once per line
+        if args.debug && parser.full_line_consumed() {
             print_debug(&runtime.stack_to_string());
         }
     }
