@@ -144,6 +144,8 @@ impl Runtime {
             "__input__" => self.call_input(),
             "__swap__" => self.call_swap(),
             "__nand__" => self.call_nand(),
+            "__shift_left__" => self.call_shift_left(),
+            "__shift_right__" => self.call_shift_right(),
             _ => Err(anyhow!(
                 "Runtime error: unrecognized built-in function '{}'.",
                 f
@@ -216,7 +218,26 @@ impl Runtime {
 
         let result = !(a & b);
         self.value_stack.push(Word::Data(result));
-        return Ok(false);
+
+        Ok(false)
+    }
+
+    fn call_shift_left(&mut self) -> Result<bool, Error> {
+        let n = self.pop_data_from_stack()?;
+
+        let result = n << 1;
+        self.value_stack.push(Word::Data(result));
+
+        Ok(false)
+    }
+
+    fn call_shift_right(&mut self) -> Result<bool, Error> {
+        let n = self.pop_data_from_stack()?;
+
+        let result = n >> 1;
+        self.value_stack.push(Word::Data(result));
+
+        Ok(false)
     }
 
     fn pop_data_from_stack(&mut self) -> Result<u32, Error> {
