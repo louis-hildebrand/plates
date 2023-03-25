@@ -110,17 +110,15 @@ impl Runtime {
     }
 
     fn run_callif(&mut self) -> Result<bool, Error> {
+        let f = self.pop_function_from_stack()?;
+
         let top_data = self.pop_data_from_stack()?;
 
         if top_data == 0 {
-            // TODO: What if there's nothing to pop?
-            // In general, be more clear about the state of the stack after a runtime error.
-            self.value_stack.pop();
-            return Ok(false);
+            Ok(false)
+        } else {
+            self.call_function(&f)
         }
-
-        let f = self.pop_function_from_stack()?;
-        self.call_function(&f)
     }
 
     fn call_function(&mut self, f: &str) -> Result<bool, Error> {
