@@ -119,21 +119,18 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
 fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
     match source.chars().nth(0) {
         None => Ok((None, source)),
-        _ if source.starts_with("PUSH") => Ok((Some(Token::Push), &source[4..])),
-        _ if source.starts_with("DEFN") => Ok((Some(Token::Defn), &source[4..])),
-        _ if source.starts_with("CALLIF") => Ok((Some(Token::CallIf), &source[6..])),
-        _ if source.starts_with("EXIT") => Ok((Some(Token::Exit), &source[4..])),
-        // Immediately return None because the comment extends all the way until
-        // the end of the line
-        _ if source.starts_with("//") => Ok((None, source)),
         Some('^') => Ok((Some(Token::Caret), &source[1..])),
         Some('*') => Ok((Some(Token::Asterisk), &source[1..])),
         Some('{') => Ok((Some(Token::LeftCurlyBracket), &source[1..])),
         Some('}') => Ok((Some(Token::RightCurlyBracket), &source[1..])),
-        Some(c) if c.is_ascii_lowercase() || c == '_' => consume_function_name(source),
+        // TODO: discard whitespace
+        Some(c) if c.is_whitespace() => consume_whitespace(source),
         // TODO: support different types (hexadecimal, binary, octal, character)
         Some(c) if c.is_ascii_digit() => consume_word(source),
-        Some(c) if c.is_whitespace() => consume_whitespace(source),
+        // Immediately return None because the comment extends all the way until
+        // the end of the line
+        _ if source.starts_with("//") => Ok((None, source)),
+        Some(c) if c.is_alphabetic() || c == '_' => consume_symbol(source),
         Some(c) => Err(anyhow!("Syntax error: unexpected character '{c}'.")),
     }
 }
@@ -167,18 +164,23 @@ fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
     Ok((Some(Token::Word(n)), &source[i..]))
 }
 
-fn consume_function_name(source: &str) -> Result<(Option<Token>, &str), Error> {
-    let mut i = 1;
-    loop {
-        match source.chars().nth(i) {
-            None => break,
-            Some(c) if !(c.is_ascii_lowercase() || c == '_' || c.is_ascii_digit()) => break,
-            _ => i += 1,
+fn consume_symbol(source: &str) -> Result<(Option<Token>, &str), Error> {
+    let (symbol, updated_source) = get_symbol(source);
+
+    match symbol {
+        "PUSH" => Ok((Some(Token::Push), updated_source)),
+        "DEFN" => Ok((Some(Token::Defn), updated_source)),
+        "CALLIF" => Ok((Some(Token::CallIf), updated_source)),
+        "EXIT" => Ok((Some(Token::Exit), updated_source)),
+        _ => Ok((Some(Token::FunctionName(symbol.to_owned())), updated_source)),
+    }
+}
+
+fn get_symbol(source: &str) -> (&str, &str) {
+    for (i, c) in source.chars().enumerate() {
+        if !c.is_alphanumeric() && c != '_' {
+            return (&source[..i], &source[i..]);
         }
     }
-
-    Ok((
-        Some(Token::FunctionName(source[..i].to_string())),
-        &source[i..],
-    ))
+    return ("", source);
 }
