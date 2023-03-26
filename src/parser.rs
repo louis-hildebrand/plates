@@ -9,7 +9,6 @@ use crate::{
 pub enum Instruction {
     PushData(u32),
     PushFunction(String),
-    PushCopy,
     PushRandom,
     PushArg(usize),
     Define(String, u32, Vec<Instruction>),
@@ -87,7 +86,6 @@ where
             None => return Err(anyhow!("Syntax error: unexpected end of file")),
             Some(Token::Word(n)) => Instruction::PushData(n),
             Some(Token::FunctionName(f)) => Instruction::PushFunction(f),
-            Some(Token::Caret) => Instruction::PushCopy,
             Some(Token::Asterisk) => Instruction::PushRandom,
             // Arguments are only allowed inside functions
             Some(Token::Argument(_)) if !inside_defn => {

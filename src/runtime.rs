@@ -71,7 +71,6 @@ impl Runtime {
             Instruction::Exit => Ok(true),
             Instruction::PushData(n) => self.run_pushdata(n),
             Instruction::PushFunction(f) => self.run_pushfunction(f),
-            Instruction::PushCopy => self.run_pushcopy(),
             Instruction::PushRandom => self.run_pushrandom(),
             Instruction::PushArg(n) => self.run_pusharg(n),
             Instruction::Define(f, arg_count, body) => self.run_define(f, arg_count, body),
@@ -87,18 +86,6 @@ impl Runtime {
     fn run_pushfunction(&mut self, f: String) -> Result<bool, Error> {
         self.value_stack.push(Word::Function(f));
         Ok(false)
-    }
-
-    fn run_pushcopy(&mut self) -> Result<bool, Error> {
-        match self.value_stack.last() {
-            None => Err(anyhow!(
-                "Runtime error: cannot push copy when the stack is empty."
-            )),
-            Some(w) => {
-                self.value_stack.push(w.clone());
-                Ok(false)
-            }
-        }
     }
 
     fn run_pushrandom(&mut self) -> Result<bool, Error> {
@@ -174,7 +161,6 @@ impl Runtime {
         match f {
             "__print__" => self.call_print(),
             "__input__" => self.call_input(),
-            "__swap__" => self.call_swap(),
             "__nand__" => self.call_nand(),
             "__shift_left__" => self.call_shift_left(),
             "__shift_right__" => self.call_shift_right(),
@@ -216,28 +202,6 @@ impl Runtime {
             self.value_stack.push(Word::Data(n));
         }
 
-        Ok(false)
-    }
-
-    fn call_swap(&mut self) -> Result<bool, Error> {
-        let idx_u32 = self.pop_data_from_stack()?;
-
-        let i: usize = match idx_u32.try_into() {
-            Ok(i) => i,
-            Err(_) => return Err(anyhow!("Runtime error: {idx_u32} is not a valid index.")),
-        };
-
-        let stack_size = self.value_stack.len();
-        if i >= stack_size {
-            return Err(anyhow!(
-                "Runtime error: cannot swap to index {} in stack of size {}.",
-                i,
-                stack_size
-            ));
-        }
-
-        let top_index = stack_size - 1;
-        self.value_stack.swap(top_index, top_index - i);
         Ok(false)
     }
 

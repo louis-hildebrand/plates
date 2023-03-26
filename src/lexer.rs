@@ -10,7 +10,6 @@ pub enum Token {
     Defn,
     CallIf,
     Exit,
-    Caret,
     Asterisk,
     LeftCurlyBracket,
     RightCurlyBracket,
@@ -105,7 +104,6 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
     loop {
         match source.chars().next() {
             None => return Ok((None, source)),
-            Some('^') => return Ok((Some(Token::Caret), &source[1..])),
             Some('*') => return Ok((Some(Token::Asterisk), &source[1..])),
             Some('{') => return Ok((Some(Token::LeftCurlyBracket), &source[1..])),
             Some('}') => return Ok((Some(Token::RightCurlyBracket), &source[1..])),
