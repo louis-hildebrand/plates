@@ -24,6 +24,7 @@ pub struct Runtime {
     function_table: HashMap<String, (u32, Vec<Instruction>)>,
     rng: ThreadRng,
     instruction_stack: Vec<Instruction>,
+    args_array: Vec<Word>,
 }
 
 impl Runtime {
@@ -33,6 +34,7 @@ impl Runtime {
             function_table: HashMap::new(),
             rng: rand::thread_rng(),
             instruction_stack: Vec::new(),
+            args_array: Vec::new(),
         }
     }
 
@@ -71,6 +73,7 @@ impl Runtime {
             Instruction::PushFunction(f) => self.run_pushfunction(f),
             Instruction::PushCopy => self.run_pushcopy(),
             Instruction::PushRandom => self.run_pushrandom(),
+            Instruction::PushArg(n) => self.run_pusharg(n),
             Instruction::Define(f, arg_count, body) => self.run_define(f, arg_count, body),
             Instruction::CallIf => self.run_callif(),
         }
@@ -101,6 +104,15 @@ impl Runtime {
     fn run_pushrandom(&mut self) -> Result<bool, Error> {
         let n = self.rng.gen();
         self.value_stack.push(Word::Data(n));
+        Ok(false)
+    }
+
+    fn run_pusharg(&mut self, n: usize) -> Result<bool, Error> {
+        let value = match self.args_array.iter().nth(n) {
+            None => return Err(anyhow!("Runtime error: argument ${n} does not exist.")),
+            Some(x) => x.clone(),
+        };
+        self.value_stack.push(value);
         Ok(false)
     }
 
@@ -136,7 +148,20 @@ impl Runtime {
             Some(body) => body,
         };
 
-        // TODO: Pop arguments from the stack
+        // TODO: Set up stack frames for argument calls?
+        self.args_array.clear();
+        for _ in 0..*arg_count {
+            let n = match self.value_stack.pop() {
+                None => {
+                    return Err(anyhow!(
+                        "Runtime error: too few arguments on the stack for function '{f}'"
+                    ))
+                }
+                Some(x) => x,
+            };
+
+            self.args_array.push(n);
+        }
 
         for instruction in body.iter().rev() {
             self.instruction_stack.push(instruction.clone());

@@ -11,6 +11,7 @@ pub enum Instruction {
     PushFunction(String),
     PushCopy,
     PushRandom,
+    PushArg(usize),
     Define(String, u32, Vec<Instruction>),
     CallIf,
     Exit,
@@ -65,7 +66,7 @@ where
                 func_name
             )),
             None => Ok(None),
-            Some(Token::Push) => self.consume_push(),
+            Some(Token::Push) => self.consume_push(inside_defn),
             // Block nested DEFNs
             Some(Token::Defn) if inside_defn => {
                 Err(anyhow!("Syntax error: nested definitions are not allowed."))
@@ -74,11 +75,11 @@ where
             Some(Token::CallIf) => Ok(Some(Instruction::CallIf)),
             Some(Token::Exit) => Ok(Some(Instruction::Exit)),
             Some(Token::RightCurlyBracket) if inside_defn => Ok(None),
-            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
+            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}.", t)),
         }
     }
 
-    fn consume_push(&mut self) -> Result<Option<Instruction>, Error> {
+    fn consume_push(&mut self, inside_defn: bool) -> Result<Option<Instruction>, Error> {
         // Increase the depth in case there was a newline between PUSH and the word
         self.depth += 1;
 
@@ -88,6 +89,13 @@ where
             Some(Token::FunctionName(f)) => Instruction::PushFunction(f),
             Some(Token::Caret) => Instruction::PushCopy,
             Some(Token::Asterisk) => Instruction::PushRandom,
+            // Arguments are only allowed inside functions
+            Some(Token::Argument(_)) if !inside_defn => {
+                return Err(anyhow!(
+                    "Syntax error: cannot use arguments outside functions."
+                ))
+            }
+            Some(Token::Argument(n)) => Instruction::PushArg(n),
             Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         };
 

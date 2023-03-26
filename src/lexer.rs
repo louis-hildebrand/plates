@@ -18,6 +18,7 @@ pub enum Token {
     Word(u32),
     LeftParen,
     RightParen,
+    Argument(usize),
 }
 
 pub struct Lexer<T>
@@ -112,6 +113,7 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
             Some('}') => return Ok((Some(Token::RightCurlyBracket), &source[1..])),
             Some('(') => return Ok((Some(Token::LeftParen), &source[1..])),
             Some(')') => return Ok((Some(Token::RightParen), &source[1..])),
+            Some('$') => return consume_argument(source),
             Some(c) if c.is_whitespace() => {
                 source = consume_whitespace(source)?;
             }
@@ -140,6 +142,12 @@ fn consume_whitespace(source: &str) -> Result<&str, Error> {
 }
 
 fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
+    let (n, updated_source) = consume_base10_int(source)?;
+
+    Ok((Some(Token::Word(n)), updated_source))
+}
+
+fn consume_base10_int(source: &str) -> Result<(u32, &str), Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -153,7 +161,7 @@ fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
         .parse::<u32>()
         .with_context(|| format!("Syntax error: invalid word '{}'.", &source[..i]))?;
 
-    Ok((Some(Token::Word(n)), &source[i..]))
+    Ok((n, &source[i..]))
 }
 
 fn consume_symbol(source: &str) -> Result<(Option<Token>, &str), Error> {
@@ -175,4 +183,12 @@ fn get_symbol(source: &str) -> (&str, &str) {
         }
     }
     return (source, "");
+}
+
+fn consume_argument(source: &str) -> Result<(Option<Token>, &str), Error> {
+    let (n, updated_source) = consume_base10_int(&source[1..])?;
+
+    let n = usize::try_from(n)?;
+
+    Ok((Some(Token::Argument(n)), updated_source))
 }
