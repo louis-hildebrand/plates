@@ -131,6 +131,7 @@ fn consume_whitespace(source: &str) -> Result<&str, Error> {
             _ => i += 1,
         }
     }
+    // TODO: Handle Unicode characters properly
     Ok(&source[i..])
 }
 
@@ -169,5 +170,5 @@ fn get_symbol(source: &str) -> (&str, &str) {
             return (&source[..i], &source[i..]);
         }
     }
-    return ("", source);
+    return (source, "");
 }
