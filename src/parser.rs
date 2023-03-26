@@ -11,7 +11,7 @@ pub enum Instruction {
     PushFunction(String),
     PushCopy,
     PushRandom,
-    Define(String, Vec<Instruction>),
+    Define(String, u32, Vec<Instruction>),
     CallIf,
     Exit,
 }
@@ -110,16 +110,20 @@ where
             return Err(anyhow!("Syntax error: cannot define function '{}' because the prefix __ is reserved for built-in functions.", func_name));
         }
 
-        // Expect curly bracket (with optional whitespace before it)
-        match self.lexer.next_token(self.depth)? {
+        // Get argument count
+        self.expect(Token::LeftParen)?;
+        let arg_count = match self.lexer.next_token(self.depth)? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
-            Some(Token::LeftCurlyBracket) => {}
+            Some(Token::Word(n)) => n,
             Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
-        }
+        };
+        self.expect(Token::RightParen)?;
+
+        self.expect(Token::LeftCurlyBracket)?;
 
         // Get body
         let body = self.consume_defn_body(&func_name)?;
-        let instruction = Instruction::Define(func_name, body);
+        let instruction = Instruction::Define(func_name, arg_count, body);
 
         // Reset depth
         self.depth -= 1;
@@ -134,6 +138,14 @@ where
                 None => return Ok(body),
                 Some(instruction) => body.push(instruction),
             }
+        }
+    }
+
+    fn expect(&mut self, token: Token) -> Result<(), Error> {
+        match self.lexer.next_token(self.depth)? {
+            None => return Err(anyhow!("Syntax error: unexpected end of file.")),
+            Some(t) if t == token => Ok(()),
+            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
     }
 }

@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Error};
 
 use crate::reader::Reader;
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum Token {
     Push,
     Defn,
@@ -16,6 +16,8 @@ pub enum Token {
     RightCurlyBracket,
     FunctionName(String),
     Word(u32),
+    LeftParen,
+    RightParen,
 }
 
 pub struct Lexer<T>
@@ -108,6 +110,8 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
             Some('*') => return Ok((Some(Token::Asterisk), &source[1..])),
             Some('{') => return Ok((Some(Token::LeftCurlyBracket), &source[1..])),
             Some('}') => return Ok((Some(Token::RightCurlyBracket), &source[1..])),
+            Some('(') => return Ok((Some(Token::LeftParen), &source[1..])),
+            Some(')') => return Ok((Some(Token::RightParen), &source[1..])),
             Some(c) if c.is_whitespace() => {
                 source = consume_whitespace(source)?;
             }

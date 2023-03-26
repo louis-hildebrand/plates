@@ -21,7 +21,7 @@ impl Display for Word {
 
 pub struct Runtime {
     value_stack: Vec<Word>,
-    function_table: HashMap<String, Vec<Instruction>>,
+    function_table: HashMap<String, (u32, Vec<Instruction>)>,
     rng: ThreadRng,
     instruction_stack: Vec<Instruction>,
 }
@@ -71,7 +71,7 @@ impl Runtime {
             Instruction::PushFunction(f) => self.run_pushfunction(f),
             Instruction::PushCopy => self.run_pushcopy(),
             Instruction::PushRandom => self.run_pushrandom(),
-            Instruction::Define(f, body) => self.run_define(f, body),
+            Instruction::Define(f, arg_count, body) => self.run_define(f, arg_count, body),
             Instruction::CallIf => self.run_callif(),
         }
     }
@@ -104,8 +104,13 @@ impl Runtime {
         Ok(false)
     }
 
-    fn run_define(&mut self, f: String, body: Vec<Instruction>) -> Result<bool, Error> {
-        self.function_table.insert(f, body);
+    fn run_define(
+        &mut self,
+        f: String,
+        arg_count: u32,
+        body: Vec<Instruction>,
+    ) -> Result<bool, Error> {
+        self.function_table.insert(f, (arg_count, body));
         Ok(false)
     }
 
@@ -126,10 +131,12 @@ impl Runtime {
             return self.call_builtin(f);
         }
 
-        let body = match self.function_table.get(f) {
+        let (arg_count, body) = match self.function_table.get(f) {
             None => return Err(anyhow!("Runtime error: function '{}' is not defined.", f)),
             Some(body) => body,
         };
+
+        // TODO: Pop arguments from the stack
 
         for instruction in body.iter().rev() {
             self.instruction_stack.push(instruction.clone());
