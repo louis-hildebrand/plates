@@ -16,7 +16,6 @@ pub enum Token {
     RightCurlyBracket,
     FunctionName(String),
     Word(u32),
-    Whitespace,
 }
 
 pub struct Lexer<T>
@@ -90,23 +89,7 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
     loop {
         match consume_token(my_source)? {
             (None, _) => {
-                // Add whitespace at the end of the line in case the reader
-                // trims newlines
-                match tokens.last() {
-                    Some(Token::Whitespace) => {}
-                    _ => tokens.push(Token::Whitespace),
-                };
                 return Ok(tokens);
-            }
-            (Some(Token::Whitespace), updated_source) => {
-                // Combine whitespace
-                match tokens.last() {
-                    Some(Token::Whitespace) => {}
-                    _ => {
-                        tokens.push(Token::Whitespace);
-                    }
-                }
-                my_source = updated_source;
             }
             (Some(token), updated_source) => {
                 tokens.push(token);
@@ -117,25 +100,29 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
 }
 
 fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
-    match source.chars().nth(0) {
-        None => Ok((None, source)),
-        Some('^') => Ok((Some(Token::Caret), &source[1..])),
-        Some('*') => Ok((Some(Token::Asterisk), &source[1..])),
-        Some('{') => Ok((Some(Token::LeftCurlyBracket), &source[1..])),
-        Some('}') => Ok((Some(Token::RightCurlyBracket), &source[1..])),
-        // TODO: discard whitespace
-        Some(c) if c.is_whitespace() => consume_whitespace(source),
-        // TODO: support different types (hexadecimal, binary, octal, character)
-        Some(c) if c.is_ascii_digit() => consume_word(source),
-        // Immediately return None because the comment extends all the way until
-        // the end of the line
-        _ if source.starts_with("//") => Ok((None, source)),
-        Some(c) if c.is_alphabetic() || c == '_' => consume_symbol(source),
-        Some(c) => Err(anyhow!("Syntax error: unexpected character '{c}'.")),
+    let mut source = source;
+    loop {
+        match source.chars().nth(0) {
+            None => return Ok((None, source)),
+            Some('^') => return Ok((Some(Token::Caret), &source[1..])),
+            Some('*') => return Ok((Some(Token::Asterisk), &source[1..])),
+            Some('{') => return Ok((Some(Token::LeftCurlyBracket), &source[1..])),
+            Some('}') => return Ok((Some(Token::RightCurlyBracket), &source[1..])),
+            Some(c) if c.is_whitespace() => {
+                source = consume_whitespace(source)?;
+            }
+            // TODO: support different types (hexadecimal, binary, octal, character)
+            Some(c) if c.is_ascii_digit() => return consume_word(source),
+            // Immediately return None because the comment extends all the way until
+            // the end of the line
+            _ if source.starts_with("//") => return Ok((None, source)),
+            Some(c) if c.is_alphabetic() || c == '_' => return consume_symbol(source),
+            Some(c) => return Err(anyhow!("Syntax error: unexpected character '{c}'.")),
+        }
     }
 }
 
-fn consume_whitespace(source: &str) -> Result<(Option<Token>, &str), Error> {
+fn consume_whitespace(source: &str) -> Result<&str, Error> {
     let mut i = 1;
     loop {
         match source.chars().nth(i) {
@@ -144,7 +131,7 @@ fn consume_whitespace(source: &str) -> Result<(Option<Token>, &str), Error> {
             _ => i += 1,
         }
     }
-    Ok((Some(Token::Whitespace), &source[i..]))
+    Ok(&source[i..])
 }
 
 fn consume_word(source: &str) -> Result<(Option<Token>, &str), Error> {
