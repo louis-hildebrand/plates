@@ -108,7 +108,7 @@ impl Runtime {
     }
 
     fn run_pusharg(&mut self, n: usize) -> Result<bool, Error> {
-        let value = match self.args_array.iter().nth(n) {
+        let value = match self.args_array.get(n) {
             None => return Err(anyhow!("Runtime error: argument ${n} does not exist.")),
             Some(x) => x.clone(),
         };
@@ -190,10 +190,9 @@ impl Runtime {
             let n = self.pop_data_from_stack()?;
 
             if n == 0 {
-                match std::io::stdout().flush() {
-                    Err(_) => return Err(anyhow!("Failed to flush stdout.")),
-                    Ok(_) => {}
-                };
+                if std::io::stdout().flush().is_err() {
+                    return Err(anyhow!("Failed to flush stdout."));
+                }
                 return Ok(false);
             }
 
@@ -208,10 +207,9 @@ impl Runtime {
 
     fn call_input(&mut self) -> Result<bool, Error> {
         let mut line = String::new();
-        match std::io::stdin().read_line(&mut line) {
-            Err(_) => return Err(anyhow!("Runtime error: failed to read from stdin.")),
-            Ok(_) => {}
-        };
+        if std::io::stdin().read_line(&mut line).is_err() {
+            return Err(anyhow!("Runtime error: failed to read from stdin."));
+        }
 
         for c in line.chars().rev() {
             let n = c as u32;

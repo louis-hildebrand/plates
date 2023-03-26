@@ -51,14 +51,13 @@ where
     /// Returns true if a new line has been read since the last time this
     /// function was called and all its tokens have been returned.
     pub fn full_line_consumed(&mut self) -> bool {
-        self.tokens.len() == 0
+        self.tokens.is_empty()
     }
 
     pub fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
         loop {
-            match self.tokens.pop_front() {
-                Some(t) => return Ok(Some(t)),
-                None => {}
+            if let Some(t) = self.tokens.pop_front() {
+                return Ok(Some(t));
             }
 
             if !self.refill_tokens(depth)? {
@@ -70,18 +69,17 @@ where
     /// Gets a new line, lexes it, and adds the tokens to self.tokens. If the
     /// reader has no more lines, returns false. Otherwise, returns true.
     fn refill_tokens(&mut self, depth: usize) -> Result<bool, Error> {
-        loop {
-            let line = match self.reader.next_line(depth) {
-                None => return Ok(false),
-                Some(x) => x,
-            };
+        let line = match self.reader.next_line(depth) {
+            None => return Ok(false),
+            Some(x) => x,
+        };
 
-            let new_tokens = lex_line(&line)?;
-            for nt in new_tokens {
-                self.tokens.push_back(nt);
-            }
-            return Ok(true);
+        let new_tokens = lex_line(&line)?;
+        for nt in new_tokens {
+            self.tokens.push_back(nt);
         }
+
+        Ok(true)
     }
 }
 
@@ -105,7 +103,7 @@ fn lex_line(source: &str) -> Result<Vec<Token>, Error> {
 fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
     let mut source = source;
     loop {
-        match source.chars().nth(0) {
+        match source.chars().next() {
             None => return Ok((None, source)),
             Some('^') => return Ok((Some(Token::Caret), &source[1..])),
             Some('*') => return Ok((Some(Token::Asterisk), &source[1..])),
@@ -182,7 +180,7 @@ fn get_symbol(source: &str) -> (&str, &str) {
             return (&source[..i], &source[i..]);
         }
     }
-    return (source, "");
+    (source, "")
 }
 
 fn consume_argument(source: &str) -> Result<(Option<Token>, &str), Error> {

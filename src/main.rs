@@ -25,7 +25,7 @@ struct CliArgs {
 fn main() {
     let args = CliArgs::parse();
 
-    if args.files.len() == 0 {
+    if args.files.is_empty() {
         run_interactive(args);
     } else {
         run_from_files(args);

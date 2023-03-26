@@ -52,7 +52,7 @@ impl FileReader {
         // TODO: make this lazy?
         let file_lines = combined_file_contents
             .lines()
-            .map(|s| String::from(s))
+            .map(String::from)
             .collect::<Vec<_>>()
             .into_iter();
 
