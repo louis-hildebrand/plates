@@ -443,6 +443,6 @@ mod tests {
         }
 
         assert_ok_and_eq!(lexer.next_token(0), None);
-        assert_eq!(lexer.full_line_consumed(), true);
+        assert!(lexer.full_line_consumed());
     }
 }
