@@ -47,8 +47,7 @@ where
         self.tokens.clear();
     }
 
-    /// Returns true if a new line has been read since the last time this
-    /// function was called and all its tokens have been returned.
+    /// Returns true if there are no tokens left on the current line.
     pub fn full_line_consumed(&mut self) -> bool {
         self.tokens.is_empty()
     }
