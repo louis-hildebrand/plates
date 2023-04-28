@@ -149,9 +149,9 @@ where
 
     fn expect(&mut self, token: Token) -> Result<(), Error> {
         match self.lexer.next_token(self.depth)? {
-            None => return Err(anyhow!("Syntax error: unexpected end of file.")),
+            None => Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(t) if t == token => Ok(()),
-            Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
+            Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),
         }
     }
 }
