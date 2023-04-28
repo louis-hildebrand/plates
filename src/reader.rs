@@ -68,3 +68,12 @@ impl Reader for FileReader {
         self.file_lines.next()
     }
 }
+
+impl<T> Reader for T
+where
+    T: Iterator<Item = String>,
+{
+    fn next_line(&mut self, _: usize) -> Option<String> {
+        self.next()
+    }
+}

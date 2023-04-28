@@ -188,3 +188,84 @@ fn consume_argument(source: &str) -> Result<(Option<Token>, &str), Error> {
 
     Ok((Some(Token::Argument(n)), updated_source))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Lexer, Token};
+
+    macro_rules! test_lex_success {
+        ( $($name:ident: ($inputs:expr, $outputs:expr)),* $(,)? ) => {
+            $(
+                #[test]
+                fn $name() {
+                    let owned_inputs = $inputs.into_iter().map(|x| x.to_owned());
+                    let mut lexer = Lexer::new(owned_inputs);
+
+                    for expected in $outputs {
+                        let token = lexer.next_token(0);
+                        assert!(token.is_ok());
+                        let token = token.unwrap();
+                        assert_eq!(Some(expected), token);
+                    }
+
+                    let token = lexer.next_token(0);
+                    assert!(token.is_ok());
+                    let token = token.unwrap();
+                    assert_eq!(None, token);
+                }
+            )*
+        };
+    }
+
+    macro_rules! test_lex_failure {
+        ( $($name:ident: ($inputs:expr, $msg:expr)),* $(,)? ) => {
+            $(
+                #[test]
+                fn $name() {
+                    let owned_inputs = $inputs.into_iter().map(|x| x.to_owned());
+                    let mut lexer = Lexer::new(owned_inputs);
+
+                    let token = lexer.next_token(0);
+                    println!("{:?}", token);
+                    assert!(token.is_err());
+                    // TODO: Also check error message
+
+                    let token = lexer.next_token(0);
+                    assert!(token.is_ok());
+                    let token = token.unwrap();
+                    assert!(token.is_none());
+                }
+            )*
+        };
+    }
+
+    // FunctionName(String),
+    test_lex_success![
+        lex_push: (vec!["PUSH"], vec![Token::Push]),
+        lex_defn: (vec!["DEFN"], vec![Token::Defn]),
+        lex_callif: (vec!["CALLIF"], vec![Token::CallIf]),
+        lex_exit: (vec!["EXIT"], vec![Token::Exit]),
+        lex_asterisk: (vec!["*"], vec![Token::Asterisk]),
+        lex_left_curly_bracket: (vec!["{"], vec![Token::LeftCurlyBracket]),
+        lex_right_curly_bracket: (vec!["}"], vec![Token::RightCurlyBracket]),
+        lex_left_paren: (vec!["("], vec![Token::LeftParen]),
+        lex_right_paren: (vec![")"], vec![Token::RightParen]),
+        lex_argument0: (vec!["$0"], vec![Token::Argument(0)]),
+        lex_argument10: (vec!["$10"], vec![Token::Argument(10)]),
+        lex_word_min: (vec!["0"], vec![Token::Word(0)]),
+        // 2^32 - 1
+        lex_word_max: (vec!["4294967295"], vec![Token::Word(4294967295)]),
+        lex_function_name:
+            (
+                vec!["my_funcName"],
+                vec![Token::FunctionName("my_funcName".to_owned())]
+            ),
+    ];
+
+    test_lex_failure![
+        fail_on_massive_word: (vec!["9".repeat(1000)], "Invalid word"),
+        // 2^32
+        fail_on_too_large_word: (vec!["4294967296"], "Invalid word"),
+        fail_on_negative_word: (vec!["-1"], "Invalid word")
+    ];
+}
