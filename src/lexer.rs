@@ -194,6 +194,24 @@ mod tests {
     use super::{Lexer, Token};
     use paste::paste;
 
+    macro_rules! assert_ok_and_eq {
+        ( $actual:expr, $expected:expr ) => {
+            let actual_val = $actual;
+            assert!(actual_val.is_ok());
+            let actual_val = actual_val.unwrap();
+            assert_eq!($expected, actual_val);
+        };
+    }
+
+    macro_rules! assert_err_with_msg {
+        ( $value:expr, $msg:expr ) => {
+            match $value {
+                Ok(x) => panic!("Expected an error but received 'Ok({x:?})'."),
+                Err(e) => assert_eq!($msg, format!("{e}")),
+            };
+        };
+    }
+
     /// Generates a test case with the given name, which checks that lexing the given inputs yields the expected
     /// outputs and then `None`.
     macro_rules! generate_success_test_case {
@@ -201,20 +219,11 @@ mod tests {
             $(
                 #[test]
                 fn $name() {
-                    let owned_inputs = $inputs.into_iter().map(|x| x.to_owned());
-                    let mut lexer = Lexer::new(owned_inputs);
-
+                    let mut lexer = Lexer::new($inputs.into_iter().map(|x| x.to_owned()));
                     for expected in $outputs {
-                        let token = lexer.next_token(0);
-                        assert!(token.is_ok());
-                        let token = token.unwrap();
-                        assert_eq!(Some(expected), token);
+                        assert_ok_and_eq!(lexer.next_token(0), Some(expected));
                     }
-
-                    let token = lexer.next_token(0);
-                    assert!(token.is_ok());
-                    let token = token.unwrap();
-                    assert_eq!(None, token);
+                    assert_ok_and_eq!(lexer.next_token(0), None);
                 }
             )*
         };
@@ -282,25 +291,15 @@ mod tests {
     }
 
     /// Generates a test case with the given name, which checks that lexing the given inputs immediately produces an
-    /// error with the given message.
+    /// error with the given message and then produces `None`.
     macro_rules! test_lex_failure {
         ( $($name:ident: ($inputs:expr, $msg:expr)),* $(,)? ) => {
             $(
                 #[test]
                 fn $name() {
-                    let owned_inputs = $inputs.into_iter().map(|x| x.to_owned());
-                    let mut lexer = Lexer::new(owned_inputs);
-
-                    let token = lexer.next_token(0);
-                    match token {
-                        Ok(_) => panic!("Expected error"),
-                        Err(e) => assert_eq!($msg, format!("{e}")),
-                    };
-
-                    let token = lexer.next_token(0);
-                    assert!(token.is_ok());
-                    let token = token.unwrap();
-                    assert!(token.is_none());
+                    let mut lexer = Lexer::new($inputs.into_iter().map(|x| x.to_owned()));
+                    assert_err_with_msg!(lexer.next_token(0), $msg);
+                    assert_ok_and_eq!(lexer.next_token(0), None);
                 }
             )*
         };
@@ -358,4 +357,16 @@ mod tests {
         fail_on_negative_word: (vec!["-1"], "Syntax error: Unexpected character '-'."),
         fail_on_hashtag: (vec!["#"], "Syntax error: Unexpected character '#'."),
     ];
+
+    #[test]
+    fn fail_and_clear_line() {
+        let lines = vec!["% PUSH 123".to_owned(), "PUSH 456".to_owned()];
+        let mut lexer = Lexer::new(lines.into_iter());
+
+        // After error, first line should be cleared but second line should remain
+        assert_err_with_msg!(lexer.next_token(0), "Syntax error: Unexpected character '%'.");
+        assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
+        assert_ok_and_eq!(lexer.next_token(0), Some(Token::Word(456)));
+        assert_ok_and_eq!(lexer.next_token(0), None);
+    }
 }
