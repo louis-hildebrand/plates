@@ -390,7 +390,7 @@ mod tests {
     ];
 
     #[test]
-    fn fail_and_clear_line() {
+    fn fail_and_discard_line() {
         let lines = vec!["% PUSH 123".to_owned(), "PUSH 456".to_owned()];
         let mut lexer = Lexer::new(lines.into_iter());
 
@@ -402,5 +402,48 @@ mod tests {
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Word(456)));
         assert_ok_and_eq!(lexer.next_token(0), None);
+    }
+
+    #[test]
+    fn clear() {
+        let lines = vec!["PUSH 123 PUSH 456".to_owned(), "PUSH 789".to_owned()];
+        let mut lexer = Lexer::new(lines.into_iter());
+
+        assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
+
+        lexer.clear();
+
+        assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
+        assert_ok_and_eq!(lexer.next_token(0), Some(Token::Word(789)));
+        assert_ok_and_eq!(lexer.next_token(0), None);
+    }
+
+    #[test]
+    fn full_line_consumed() {
+        let lines = vec![
+            "DEFN f (0) {".to_owned(),
+            "    PUSH 123".to_owned(),
+            "}".to_owned(),
+        ];
+        let mut lexer = Lexer::new(lines.into_iter());
+        let expected = [
+            (Token::Defn, false),
+            (Token::FunctionName("f".to_owned()), false),
+            (Token::LeftParen, false),
+            (Token::Word(0), false),
+            (Token::RightParen, false),
+            (Token::LeftCurlyBracket, true),
+            (Token::Push, false),
+            (Token::Word(123), true),
+            (Token::RightCurlyBracket, true),
+        ];
+
+        for (token, end_of_line) in expected {
+            assert_ok_and_eq!(lexer.next_token(0), Some(token));
+            assert_eq!(lexer.full_line_consumed(), end_of_line);
+        }
+
+        assert_ok_and_eq!(lexer.next_token(0), None);
+        assert_eq!(lexer.full_line_consumed(), true);
     }
 }
