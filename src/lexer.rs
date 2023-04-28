@@ -119,7 +119,7 @@ fn consume_token(source: &str) -> Result<(Option<Token>, &str), Error> {
             // the end of the line
             _ if source.starts_with("//") => return Ok((None, source)),
             Some(c) if c.is_alphabetic() || c == '_' => return consume_symbol(source),
-            Some(c) => return Err(anyhow!("Syntax error: unexpected character '{c}'.")),
+            Some(c) => return Err(anyhow!("Syntax error: Unexpected character '{c}'.")),
         }
     }
 }
@@ -155,7 +155,7 @@ fn consume_base10_int(source: &str) -> Result<(u32, &str), Error> {
 
     let n = source[..i]
         .parse::<u32>()
-        .with_context(|| format!("Syntax error: invalid word '{}'.", &source[..i]))?;
+        .with_context(|| format!("Syntax error: Invalid word '{}'.", &source[..i]))?;
 
     Ok((n, &source[i..]))
 }
@@ -292,9 +292,10 @@ mod tests {
                     let mut lexer = Lexer::new(owned_inputs);
 
                     let token = lexer.next_token(0);
-                    println!("{:?}", token);
-                    assert!(token.is_err());
-                    // TODO: Also check error message
+                    match token {
+                        Ok(_) => panic!("Expected error"),
+                        Err(e) => assert_eq!($msg, format!("{e}")),
+                    };
 
                     let token = lexer.next_token(0);
                     assert!(token.is_ok());
@@ -351,9 +352,10 @@ mod tests {
     ];
 
     test_lex_failure![
-        fail_on_massive_word: (vec!["9".repeat(1000)], "Invalid word"),
+        fail_on_massive_word: (vec!["9".repeat(1000)], format!("Syntax error: Invalid word '{}'.", "9".repeat(1000))),
         // 2^32
-        fail_on_too_large_word: (vec!["4294967296"], "Invalid word"),
-        fail_on_negative_word: (vec!["-1"], "Invalid word"),
+        fail_on_too_large_word: (vec!["4294967296"], "Syntax error: Invalid word '4294967296'."),
+        fail_on_negative_word: (vec!["-1"], "Syntax error: Unexpected character '-'."),
+        fail_on_hashtag: (vec!["#"], "Syntax error: Unexpected character '#'."),
     ];
 }
