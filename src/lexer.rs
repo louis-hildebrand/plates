@@ -230,8 +230,8 @@ mod tests {
     }
 
     // TODO: test with more complex whitespace (e.g., U+200B, U+00A0)
-    const WHITESPACE: &str = " \t ";
-    const COMMENT: &str = "// comment";
+    const SPC: &str = " \t ";
+    const CMT: &str = "// comment";
 
     macro_rules! test_lex_success {
         ( $($name:ident: ($code:expr, $token:expr)),* $(,)? ) => {
@@ -240,44 +240,75 @@ mod tests {
                     generate_success_test_case![
                         // Single token
                         $name: (vec![$code], vec![$token]),
-                        [<$name _whitespace>]: (vec![format!("{}{WHITESPACE}", $code)], vec![$token]),
-                        [<$name _comment>]: (vec![format!("{}{COMMENT}", $code)], vec![$token]),
+                        [<$name _whitespace>]: (vec![format!("{}{SPC}", $code)], vec![$token]),
+                        [<$name _comment>]: (vec![format!("{}{CMT}", $code)], vec![$token]),
                         [<$name _lf>]: (vec![format!("{}\n", $code)], vec![$token]),
                         [<$name _crlf>]: (vec![format!("{}\r\n", $code)], vec![$token]),
                         [<$name _whitespace_comment >]: (
-                            vec![format!("{}{WHITESPACE}{COMMENT}", $code)],
+                            vec![format!("{}{SPC}{CMT}", $code)],
                             vec![$token]
                         ),
-                        // Token followed by function name
-                        [<$name _funcname>]: (
-                            vec![format!("{}{WHITESPACE}foo", $code)],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        // Token followed by PUSH
+                        [<$name _push>]: (
+                            vec![format!("{}{SPC}PUSH", $code)],
+                            vec![$token, Token::Push]
                         ),
-                        [<$name _newline_funcname>]: (
-                            vec![$code, "foo"],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        [<$name _newline_push>]: (
+                            vec![$code, "PUSH"],
+                            vec![$token, Token::Push]
                         ),
-                        [<$name _newline_lf_funcname>]: (
-                            vec![format!("{}\n", $code), "foo\n".to_owned()],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        [<$name _newline_lf_push>]: (
+                            vec![format!("{}\n", $code), "PUSH\n".to_owned()],
+                            vec![$token, Token::Push]
                         ),
-                        [<$name _newline_crlf_funcname>]: (
-                            vec![format!("{}\r\n", $code), "foo\r\n".to_owned()],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        [<$name _newline_crlf_push>]: (
+                            vec![format!("{}\r\n", $code), "PUSH\r\n".to_owned()],
+                            vec![$token, Token::Push]
                         ),
-                        [<$name _newline_whitespace_lf_funcname>]: (
+                        [<$name _newline_whitespace_lf_push>]: (
                             vec![
-                                format!("{WHITESPACE}{}{WHITESPACE}\n", $code),
-                                format!("{WHITESPACE}foo{WHITESPACE}\n")
+                                format!("{SPC}{}{SPC}\n", $code),
+                                format!("{SPC}PUSH{SPC}\n"),
                             ],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                            vec![$token, Token::Push]
                         ),
-                        [<$name _newline_whitespace_crlf_funcname>]: (
+                        [<$name _newline_whitespace_crlf_push>]: (
                             vec![
-                                format!("{WHITESPACE}{}{WHITESPACE}\r\n", $code),
-                                format!("{WHITESPACE}foo{WHITESPACE}\r\n")
+                                format!("{SPC}{}{SPC}\r\n", $code),
+                                format!("{SPC}PUSH{SPC}\r\n"),
                             ],
-                            vec![$token, Token::FunctionName("foo".to_owned())]
+                            vec![$token, Token::Push]
+                        ),
+                        // Token preceded by PUSH
+                        [<$name _after_push>]: (
+                            vec![format!("PUSH{SPC}{}", $code)],
+                            vec![Token::Push, $token]
+                        ),
+                        [<$name _after_push_newline>]: (
+                            vec!["PUSH", $code],
+                            vec![Token::Push, $token]
+                        ),
+                        [<$name _after_push_newline_lf>]: (
+                            vec!["PUSH\n".to_owned(), format!("{}\n", $code)],
+                            vec![Token::Push, $token]
+                        ),
+                        [<$name _after_push_newline_crlf>]: (
+                            vec!["PUSH\r\n".to_owned(), format!("{}\r\n", $code)],
+                            vec![Token::Push, $token]
+                        ),
+                        [<$name _after_push_newline_whitespace_lf>]: (
+                            vec![
+                                format!("{SPC}PUSH{SPC}\n"),
+                                format!("{SPC}{}{SPC}\n", $code),
+                            ],
+                            vec![Token::Push, $token]
+                        ),
+                        [<$name _after_push_newline_whitespace_crlf>]: (
+                            vec![
+                                format!("{SPC}PUSH{SPC}\r\n"),
+                                format!("{SPC}{}{SPC}\r\n", $code),
+                            ],
+                            vec![Token::Push, $token]
                         ),
                         // Token followed immediately by bracket
                         [<$name _left_curly>]: (vec![format!("{}{{", $code)], vec![$token, Token::LeftCurlyBracket]),
@@ -364,7 +395,10 @@ mod tests {
         let mut lexer = Lexer::new(lines.into_iter());
 
         // After error, first line should be cleared but second line should remain
-        assert_err_with_msg!(lexer.next_token(0), "Syntax error: Unexpected character '%'.");
+        assert_err_with_msg!(
+            lexer.next_token(0),
+            "Syntax error: Unexpected character '%'."
+        );
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Word(456)));
         assert_ok_and_eq!(lexer.next_token(0), None);
