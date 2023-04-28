@@ -192,8 +192,11 @@ fn consume_argument(source: &str) -> Result<(Option<Token>, &str), Error> {
 #[cfg(test)]
 mod tests {
     use super::{Lexer, Token};
+    use paste::paste;
 
-    macro_rules! test_lex_success {
+    /// Generates a test case with the given name, which checks that lexing the given inputs yields the expected
+    /// outputs and then `None`.
+    macro_rules! generate_success_test_case {
         ( $($name:ident: ($inputs:expr, $outputs:expr)),* $(,)? ) => {
             $(
                 #[test]
@@ -217,6 +220,69 @@ mod tests {
         };
     }
 
+    // TODO: test with more complex whitespace (e.g., U+200B, U+00A0)
+    const WHITESPACE: &str = " \t ";
+    const COMMENT: &str = "// comment";
+
+    macro_rules! test_lex_success {
+        ( $($name:ident: ($code:expr, $token:expr)),* $(,)? ) => {
+            $(
+                paste! {
+                    generate_success_test_case![
+                        // Single token
+                        $name: (vec![$code], vec![$token]),
+                        [<$name _whitespace>]: (vec![format!("{}{WHITESPACE}", $code)], vec![$token]),
+                        [<$name _comment>]: (vec![format!("{}{COMMENT}", $code)], vec![$token]),
+                        [<$name _lf>]: (vec![format!("{}\n", $code)], vec![$token]),
+                        [<$name _crlf>]: (vec![format!("{}\r\n", $code)], vec![$token]),
+                        [<$name _whitespace_comment >]: (
+                            vec![format!("{}{WHITESPACE}{COMMENT}", $code)],
+                            vec![$token]
+                        ),
+                        // Token followed by function name
+                        [<$name _funcname>]: (
+                            vec![format!("{}{WHITESPACE}foo", $code)],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        [<$name _newline_funcname>]: (
+                            vec![$code, "foo"],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        [<$name _newline_lf_funcname>]: (
+                            vec![format!("{}\n", $code), "foo\n".to_owned()],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        [<$name _newline_crlf_funcname>]: (
+                            vec![format!("{}\r\n", $code), "foo\r\n".to_owned()],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        [<$name _newline_whitespace_lf_funcname>]: (
+                            vec![
+                                format!("{WHITESPACE}{}{WHITESPACE}\n", $code),
+                                format!("{WHITESPACE}foo{WHITESPACE}\n")
+                            ],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        [<$name _newline_whitespace_crlf_funcname>]: (
+                            vec![
+                                format!("{WHITESPACE}{}{WHITESPACE}\r\n", $code),
+                                format!("{WHITESPACE}foo{WHITESPACE}\r\n")
+                            ],
+                            vec![$token, Token::FunctionName("foo".to_owned())]
+                        ),
+                        // Token followed immediately by bracket
+                        [<$name _left_curly>]: (vec![format!("{}{{", $code)], vec![$token, Token::LeftCurlyBracket]),
+                        [<$name _right_curly>]: (vec![format!("{}}}", $code)], vec![$token, Token::RightCurlyBracket]),
+                        [<$name _left_paren>]: (vec![format!("{}(", $code)], vec![$token, Token::LeftParen]),
+                        [<$name _right_paren>]: (vec![format!("{})", $code)], vec![$token, Token::RightParen]),
+                    ];
+                }
+            )*
+        };
+    }
+
+    /// Generates a test case with the given name, which checks that lexing the given inputs immediately produces an
+    /// error with the given message.
     macro_rules! test_lex_failure {
         ( $($name:ident: ($inputs:expr, $msg:expr)),* $(,)? ) => {
             $(
@@ -239,26 +305,48 @@ mod tests {
         };
     }
 
-    // FunctionName(String),
     test_lex_success![
-        lex_push: (vec!["PUSH"], vec![Token::Push]),
-        lex_defn: (vec!["DEFN"], vec![Token::Defn]),
-        lex_callif: (vec!["CALLIF"], vec![Token::CallIf]),
-        lex_exit: (vec!["EXIT"], vec![Token::Exit]),
-        lex_asterisk: (vec!["*"], vec![Token::Asterisk]),
-        lex_left_curly_bracket: (vec!["{"], vec![Token::LeftCurlyBracket]),
-        lex_right_curly_bracket: (vec!["}"], vec![Token::RightCurlyBracket]),
-        lex_left_paren: (vec!["("], vec![Token::LeftParen]),
-        lex_right_paren: (vec![")"], vec![Token::RightParen]),
-        lex_argument0: (vec!["$0"], vec![Token::Argument(0)]),
-        lex_argument10: (vec!["$10"], vec![Token::Argument(10)]),
-        lex_word_min: (vec!["0"], vec![Token::Word(0)]),
+        push: ("PUSH", Token::Push),
+        defn: ("DEFN", Token::Defn),
+        callif: ("CALLIF", Token::CallIf),
+        exit: ("EXIT", Token::Exit),
+        asterisk: ("*", Token::Asterisk),
+        left_curly_bracket: ("{", Token::LeftCurlyBracket),
+        right_curly_bracket: ("}", Token::RightCurlyBracket),
+        left_paren: ("(", Token::LeftParen),
+        right_paren: (")", Token::RightParen),
+        argument0: ("$0", Token::Argument(0)),
+        argument10: ("$10", Token::Argument(10)),
+        word_min: ("0", Token::Word(0)),
         // 2^32 - 1
-        lex_word_max: (vec!["4294967295"], vec![Token::Word(4294967295)]),
-        lex_function_name:
+        word_max: ("4294967295", Token::Word(4294967295)),
+        function_name:
             (
-                vec!["my_funcName"],
-                vec![Token::FunctionName("my_funcName".to_owned())]
+                "my_funcName",
+                Token::FunctionName("my_funcName".to_owned())
+            ),
+    ];
+
+    generate_success_test_case![
+        push123:
+            (
+                vec!["PUSH123"],
+                vec![Token::FunctionName("PUSH123".to_owned())]
+            ),
+        defn123:
+            (
+                vec!["DEFN123"],
+                vec![Token::FunctionName("DEFN123".to_owned())]
+            ),
+        callif123:
+            (
+                vec!["CALLIF123"],
+                vec![Token::FunctionName("CALLIF123".to_owned())]
+            ),
+        exit123:
+            (
+                vec!["EXIT123"],
+                vec![Token::FunctionName("EXIT123".to_owned())]
             ),
     ];
 
@@ -266,6 +354,6 @@ mod tests {
         fail_on_massive_word: (vec!["9".repeat(1000)], "Invalid word"),
         // 2^32
         fail_on_too_large_word: (vec!["4294967296"], "Invalid word"),
-        fail_on_negative_word: (vec!["-1"], "Invalid word")
+        fail_on_negative_word: (vec!["-1"], "Invalid word"),
     ];
 }
