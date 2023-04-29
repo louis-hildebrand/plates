@@ -4,7 +4,14 @@ use std::{collections::HashMap, fmt::Display, io::Write};
 
 use crate::parser::Instruction;
 
-#[derive(Clone)]
+const ERR_UNDERFLOW: &str = "Runtime error: Stack underflow.";
+const ERR_UNDEFINED: &str = "Runtime error: Undefined argument or function.";
+const ERR_TYPE: &str = "Runtime error: Wrong type.";
+const ERR_UTF32: &str = "Runtime error: Invalid UTF-32 code point.";
+const ERR_STDOUT: &str = "Environment error: Failed to flush stdout.";
+const ERR_STDIN: &str = "Environment error: Failed to read from stdin.";
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum Word {
     Data(u32),
     Function(String),
@@ -19,12 +26,22 @@ impl Display for Word {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Runtime {
     value_stack: Vec<Word>,
     function_table: HashMap<String, (u32, Vec<Instruction>)>,
     rng: ThreadRng,
     instruction_stack: Vec<Instruction>,
     args_array: Vec<Word>,
+}
+
+impl PartialEq for Runtime {
+    fn eq(&self, other: &Self) -> bool {
+        self.value_stack == other.value_stack
+            && self.function_table == other.function_table
+            && self.instruction_stack == other.instruction_stack
+            && self.args_array == other.args_array
+    }
 }
 
 impl Runtime {
@@ -96,7 +113,7 @@ impl Runtime {
 
     fn run_pusharg(&mut self, n: usize) -> Result<bool, Error> {
         let value = match self.args_array.get(n) {
-            None => return Err(anyhow!("Runtime error: argument ${n} does not exist.")),
+            None => return Err(anyhow!(ERR_UNDEFINED)),
             Some(x) => x.clone(),
         };
         self.value_stack.push(value);
@@ -131,19 +148,14 @@ impl Runtime {
         }
 
         let (arg_count, body) = match self.function_table.get(f) {
-            None => return Err(anyhow!("Runtime error: function '{}' is not defined.", f)),
+            None => return Err(anyhow!(ERR_UNDEFINED)),
             Some(body) => body,
         };
 
-        // TODO: Set up stack frames for argument calls?
         self.args_array.clear();
         for _ in 0..*arg_count {
             let n = match self.value_stack.pop() {
-                None => {
-                    return Err(anyhow!(
-                        "Runtime error: too few arguments on the stack for function '{f}'"
-                    ))
-                }
+                None => return Err(anyhow!(ERR_UNDERFLOW)),
                 Some(x) => x,
             };
 
@@ -164,10 +176,7 @@ impl Runtime {
             "__nand__" => self.call_nand(),
             "__shift_left__" => self.call_shift_left(),
             "__shift_right__" => self.call_shift_right(),
-            _ => Err(anyhow!(
-                "Runtime error: unrecognized built-in function '{}'.",
-                f
-            )),
+            _ => Err(anyhow!(ERR_UNDEFINED)),
         }
     }
 
@@ -177,13 +186,13 @@ impl Runtime {
 
             if n == 0 {
                 if std::io::stdout().flush().is_err() {
-                    return Err(anyhow!("Failed to flush stdout."));
+                    return Err(anyhow!(ERR_STDOUT));
                 }
                 return Ok(false);
             }
 
             let c = match char::from_u32(n) {
-                None => return Err(anyhow!("Runtime error: {n} is not a valid code point.")),
+                None => return Err(anyhow!(ERR_UTF32)),
                 Some(c) => c,
             };
 
@@ -194,7 +203,7 @@ impl Runtime {
     fn call_input(&mut self) -> Result<bool, Error> {
         let mut line = String::new();
         if std::io::stdin().read_line(&mut line).is_err() {
-            return Err(anyhow!("Runtime error: failed to read from stdin."));
+            return Err(anyhow!(ERR_STDIN));
         }
 
         for c in line.chars().rev() {
@@ -236,23 +245,732 @@ impl Runtime {
 
     fn pop_data_from_stack(&mut self) -> Result<u32, Error> {
         match self.value_stack.pop() {
-            None => Err(anyhow!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Function(f)) => Err(anyhow!(
-                "Runtime error: expected data but received function '{}'.",
-                f
-            )),
+            None => Err(anyhow!(ERR_UNDERFLOW)),
+            Some(Word::Function(_)) => Err(anyhow!(ERR_TYPE)),
             Some(Word::Data(n)) => Ok(n),
         }
     }
 
     fn pop_function_from_stack(&mut self) -> Result<String, Error> {
         match self.value_stack.pop() {
-            None => Err(anyhow!("Runtime error: cannot pop from empty stack.")),
-            Some(Word::Data(n)) => Err(anyhow!(
-                "Runtime error: expected function but received data '{}'.",
-                n
-            )),
+            None => Err(anyhow!(ERR_UNDERFLOW)),
+            Some(Word::Data(_)) => Err(anyhow!(ERR_TYPE)),
             Some(Word::Function(f)) => Ok(f),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::{Instruction, Runtime, Word};
+
+    macro_rules! assert_ok_and_eq {
+        ( $actual:expr, $expected:expr ) => {
+            let actual_val = $actual;
+            assert!(actual_val.is_ok());
+            let actual_val = actual_val.unwrap();
+            assert_eq!($expected, actual_val);
+        };
+    }
+
+    macro_rules! assert_err_with_msg {
+        ( $value:expr, $msg:expr ) => {
+            match $value {
+                Ok(x) => panic!("Expected an error but received 'Ok({x:?})'."),
+                Err(e) => assert_eq!($msg, format!("{e}")),
+            };
+        };
+    }
+
+    #[test]
+    fn new_runtime() {
+        let expected = Runtime {
+            value_stack: vec![],
+            function_table: HashMap::new(),
+            rng: rand::thread_rng(),
+            instruction_stack: vec![],
+            args_array: vec![],
+        };
+        assert_eq!(expected, Runtime::new());
+    }
+
+    #[test]
+    fn push_data() {
+        let mut actual = Runtime::new();
+        let mut expected = Runtime::new();
+
+        // Empty stack
+        assert_ok_and_eq!(actual.run(Instruction::PushData(123)), false);
+        expected.value_stack.push(Word::Data(123));
+        assert_eq!(expected, actual);
+
+        // Non-empty stack
+        assert_ok_and_eq!(actual.run(Instruction::PushData(456)), false);
+        expected.value_stack.push(Word::Data(456));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn push_undefined_function() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Function("foo".to_owned())],
+            ..Runtime::new()
+        };
+        let instruction = Instruction::PushFunction("bar".to_owned());
+        let after = Runtime {
+            value_stack: vec![
+                Word::Function("foo".to_owned()),
+                Word::Function("bar".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(instruction), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn push_defined_function() {
+        let mut runtime = Runtime {
+            function_table: HashMap::from([("foo".to_owned(), (0, vec![]))]),
+            ..Runtime::new()
+        };
+        let instruction = Instruction::PushFunction("foo".to_owned());
+        let after = Runtime {
+            value_stack: vec![Word::Function("foo".to_owned())],
+            function_table: HashMap::from([("foo".to_owned(), (0, vec![]))]),
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(instruction), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn push_random() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Function("foo".to_owned()), Word::Data(123)],
+            ..Runtime::new()
+        };
+        let instruction = Instruction::PushRandom;
+        let after = Runtime::new();
+
+        assert_ok_and_eq!(runtime.run(instruction), false);
+
+        // Compare runtime without value stack
+        let updated_value_stack = runtime.value_stack;
+        runtime.value_stack = after.value_stack.clone();
+        assert_eq!(runtime, after);
+
+        // Check value stack: right length, first few values untouched, new value is any data word
+        assert_eq!(updated_value_stack.len(), 3);
+        assert_eq!(
+            vec![Word::Function("foo".to_owned()), Word::Data(123)],
+            updated_value_stack[..2]
+        );
+        assert!(matches!(updated_value_stack[2], Word::Data(_)));
+    }
+
+    #[test]
+    fn push_valid_args() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(123), Word::Function("foo".to_owned())],
+            function_table: HashMap::from([(
+                "swap".to_owned(),
+                (1, vec![Instruction::PushArg(0), Instruction::PushArg(1)]),
+            )]),
+            args_array: vec![Word::Data(0), Word::Data(1)],
+            ..Runtime::new()
+        };
+        let mut after = runtime.clone();
+
+        assert_ok_and_eq!(runtime.run(Instruction::PushArg(0)), false);
+        after.value_stack.push(Word::Data(0));
+        assert_eq!(after, runtime);
+
+        assert_ok_and_eq!(runtime.run(Instruction::PushArg(1)), false);
+        after.value_stack.push(Word::Data(1));
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn push_invalid_args() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(123), Word::Function("foo".to_owned())],
+            function_table: HashMap::from([(
+                "swap".to_owned(),
+                (1, vec![Instruction::PushArg(0), Instruction::PushArg(1)]),
+            )]),
+            args_array: vec![Word::Data(0), Word::Data(1)],
+            ..Runtime::new()
+        };
+        let after = runtime.clone();
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::PushArg(2)),
+            "Runtime error: Undefined argument or function."
+        );
+        assert_eq!(runtime, after);
+    }
+
+    #[test]
+    fn define() {
+        let mut runtime = Runtime::new();
+        let instruction = Instruction::Define(
+            "foo".to_owned(),
+            2,
+            vec![Instruction::PushData(123), Instruction::PushData(456)],
+        );
+        let after = Runtime {
+            function_table: HashMap::from([(
+                "foo".to_owned(),
+                (
+                    2,
+                    vec![Instruction::PushData(123), Instruction::PushData(456)],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(instruction), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_true() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("bar".to_owned()),
+                Word::Data(789),
+                Word::Data(1),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([(
+                "foo".to_owned(),
+                (
+                    0,
+                    vec![Instruction::PushData(123), Instruction::PushData(456)],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![
+                Word::Function("bar".to_owned()),
+                Word::Data(789),
+                Word::Data(123),
+                Word::Data(456),
+            ],
+            function_table: HashMap::from([(
+                "foo".to_owned(),
+                (
+                    0,
+                    vec![Instruction::PushData(123), Instruction::PushData(456)],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_false() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("bar".to_owned()),
+                Word::Data(789),
+                Word::Data(0),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([(
+                "foo".to_owned(),
+                (
+                    0,
+                    vec![Instruction::PushData(123), Instruction::PushData(456)],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Function("bar".to_owned()), Word::Data(789)],
+            function_table: HashMap::from([(
+                "foo".to_owned(),
+                (
+                    0,
+                    vec![Instruction::PushData(123), Instruction::PushData(456)],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_undefined() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(1),
+                Word::Function("undefined".to_owned()),
+                Word::Data(0),
+                Word::Function("undefined".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+        let mut expected = runtime.clone();
+
+        // No problem if the function isn't called
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        expected.value_stack.remove(3);
+        expected.value_stack.remove(2);
+        assert_eq!(expected, runtime);
+
+        // Error if the function is called
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        expected.value_stack.remove(1);
+        expected.value_stack.remove(0);
+        assert_eq!(expected, runtime);
+    }
+
+    #[test]
+    fn callif_nested_success() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(3),
+                Word::Data(1),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([
+                (
+                    "foo".to_owned(),
+                    (
+                        1,
+                        vec![
+                            Instruction::PushArg(0),
+                            Instruction::PushData(1),
+                            Instruction::PushFunction("bar".to_owned()),
+                            Instruction::CallIf,
+                            Instruction::PushData(123),
+                        ],
+                    ),
+                ),
+                (
+                    "bar".to_owned(),
+                    (
+                        0,
+                        vec![
+                            Instruction::PushData(1),
+                            Instruction::PushFunction("__shift_left__".to_owned()),
+                            Instruction::CallIf,
+                        ],
+                    ),
+                ),
+            ]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Data(6), Word::Data(123)],
+            ..runtime.clone()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_nested_custom_args_cleared() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(3),
+                Word::Data(1),
+                Word::Function("bad".to_owned()),
+            ],
+            function_table: HashMap::from([
+                (
+                    "bad".to_owned(),
+                    (
+                        1,
+                        vec![
+                            Instruction::PushArg(0),
+                            Instruction::PushData(1),
+                            Instruction::PushFunction("empty".to_owned()),
+                            Instruction::CallIf,
+                            Instruction::PushArg(0),
+                        ],
+                    ),
+                ),
+                ("empty".to_owned(), (0, vec![])),
+            ]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![],
+            ..runtime.clone()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_nested_builtin_args_cleared() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(3),
+                Word::Data(1),
+                Word::Function("bad".to_owned()),
+            ],
+            function_table: HashMap::from([(
+                "bad".to_owned(),
+                (
+                    1,
+                    vec![
+                        Instruction::PushArg(0),
+                        Instruction::PushData(1),
+                        Instruction::PushFunction("__shift_left__".to_owned()),
+                        Instruction::CallIf,
+                        Instruction::PushArg(0),
+                    ],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![],
+            ..runtime.clone()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_exit() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(1), Word::Function("exit".to_owned())],
+            function_table: HashMap::from([(
+                "exit".to_owned(),
+                (
+                    0,
+                    vec![
+                        Instruction::PushData(123),
+                        Instruction::Exit,
+                        Instruction::PushData(456),
+                    ],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Data(123)],
+            instruction_stack: vec![Instruction::PushData(456)],
+            ..runtime.clone()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), true);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_error() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(1), Word::Function("evil".to_owned())],
+            function_table: HashMap::from([(
+                "evil".to_owned(),
+                (
+                    1,
+                    vec![
+                        Instruction::PushData(123),
+                        Instruction::PushArg(0),
+                        Instruction::PushData(456),
+                    ],
+                ),
+            )]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Data(123)],
+            ..runtime.clone()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn callif_empty_stack() {
+        let mut runtime = Runtime::new();
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn callif_almost_empty_stack() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Function("foo".to_owned())],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn callif_data_first() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Function("empty".to_owned()), Word::Data(1)],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn callif_function_second() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("empty".to_owned()),
+                Word::Function("empty".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_nand() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(12),
+                Word::Data(10),
+                Word::Data(1),
+                Word::Function("__nand__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Data(4294967287)],
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn builtin_nand_empty_stack() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(1), Word::Function("__nand__".to_owned())],
+            ..Runtime::new()
+        };
+
+        // Only one value on the stack after popping function and data: stack underflow
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_nand_almost_empty_stack() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("foo".to_owned()),
+                Word::Data(1),
+                Word::Function("__nand__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_nand_function_first() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(42),
+                Word::Function("foo".to_owned()),
+                Word::Data(1),
+                Word::Function("__nand__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_nand_function_second() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("foo".to_owned()),
+                Word::Data(42),
+                Word::Data(1),
+                Word::Function("__nand__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_shift_left() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                // 2^31 + 4 + 1
+                Word::Data(2147483653),
+                Word::Data(1),
+                Word::Function("__shift_left__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![Word::Data(10)],
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn builtin_shift_left_empty_stack() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(1), Word::Function("__shift_left__".to_owned())],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_shift_left_function_first() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("foo".to_owned()),
+                Word::Data(1),
+                Word::Function("__shift_left__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_shift_right() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                // 2^31 + 4 + 1
+                Word::Data(2147483653),
+                Word::Data(1),
+                Word::Function("__shift_right__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            // 2^30 + 2
+            value_stack: vec![Word::Data(1073741826)],
+            ..Runtime::new()
+        };
+
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn builtin_shift_right_empty_stack() {
+        let mut runtime = Runtime {
+            value_stack: vec![Word::Data(1), Word::Function("__shift_right__".to_owned())],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Stack underflow."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn builtin_shift_right_function_first() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Function("foo".to_owned()),
+                Word::Data(1),
+                Word::Function("__shift_right__".to_owned()),
+            ],
+            ..Runtime::new()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Wrong type."
+        );
+        assert_eq!(Runtime::new(), runtime);
+    }
+
+    #[test]
+    fn exit() {
+        let mut runtime = Runtime::new();
+
+        assert_ok_and_eq!(runtime.run(Instruction::Exit), true);
+        assert_eq!(Runtime::new(), runtime);
     }
 }
