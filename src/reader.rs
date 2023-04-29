@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{anyhow, Error};
 
-pub trait Reader {
+pub trait LineStream {
     /// depth starts at zero and increases by one for each unfinished DEFN.
     fn next_line(&mut self, depth: usize) -> Option<String>;
 }
@@ -19,7 +19,7 @@ impl InteractiveReader {
     }
 }
 
-impl Reader for InteractiveReader {
+impl LineStream for InteractiveReader {
     fn next_line(&mut self, depth: usize) -> Option<String> {
         print!("{} ", ">".repeat(depth + 1));
         io::stdout().flush().expect("Failed to flush stdout");
@@ -63,13 +63,14 @@ impl FileReader {
     }
 }
 
-impl Reader for FileReader {
+impl LineStream for FileReader {
     fn next_line(&mut self, _: usize) -> Option<String> {
         self.file_lines.next()
     }
 }
 
-impl<T> Reader for T
+// This implementation is for testing purposes, so that the lexer can be tested on a known stream of lines.
+impl<T> LineStream for T
 where
     T: Iterator<Item = String>,
 {

@@ -1,9 +1,6 @@
 use anyhow::{anyhow, Error};
 
-use crate::{
-    lexer::{Lexer, Token},
-    reader::Reader,
-};
+use crate::lexer::{Token, TokenStream};
 
 #[derive(Debug, Clone)]
 pub enum Instruction {
@@ -18,19 +15,21 @@ pub enum Instruction {
 
 pub struct Parser<T>
 where
-    T: Reader,
+    T: TokenStream,
 {
-    lexer: Lexer<T>,
+    token_stream: T,
     depth: usize,
 }
 
 impl<T> Parser<T>
 where
-    T: Reader,
+    T: TokenStream,
 {
-    pub fn new(reader: T) -> Self {
-        let lexer = Lexer::new(reader);
-        Parser { lexer, depth: 0 }
+    pub fn new(token_stream: T) -> Self {
+        Parser {
+            token_stream,
+            depth: 0,
+        }
     }
 
     pub fn next_instruction(&mut self) -> Result<Option<Instruction>, Error> {
@@ -46,12 +45,12 @@ where
     }
 
     /// Clears the underlying lexer.
-    pub fn clear(&mut self) {
-        self.lexer.clear();
+    pub fn clear_line(&mut self) {
+        self.token_stream.clear_line();
     }
 
     pub fn full_line_consumed(&mut self) -> bool {
-        self.lexer.full_line_consumed()
+        self.token_stream.full_line_consumed()
     }
 
     fn consume_instruction(
@@ -59,7 +58,7 @@ where
         inside_defn: bool,
         func_name: &str,
     ) -> Result<Option<Instruction>, Error> {
-        match self.lexer.next_token(self.depth)? {
+        match self.token_stream.next_token(self.depth)? {
             None if inside_defn => Err(anyhow!(
                 "Syntax error: reached end of file with unfinished definition for '{}'.",
                 func_name
@@ -82,7 +81,7 @@ where
         // Increase the depth in case there was a newline between PUSH and the word
         self.depth += 1;
 
-        let instruction = match self.lexer.next_token(self.depth)? {
+        let instruction = match self.token_stream.next_token(self.depth)? {
             None => return Err(anyhow!("Syntax error: unexpected end of file")),
             Some(Token::Word(n)) => Instruction::PushData(n),
             Some(Token::FunctionName(f)) => Instruction::PushFunction(f),
@@ -107,7 +106,7 @@ where
         self.depth += 1;
 
         // Get function name
-        let func_name = match self.lexer.next_token(self.depth)? {
+        let func_name = match self.token_stream.next_token(self.depth)? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(Token::FunctionName(f)) => f,
             Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
@@ -118,7 +117,7 @@ where
 
         // Get argument count
         self.expect(Token::LeftParen)?;
-        let arg_count = match self.lexer.next_token(self.depth)? {
+        let arg_count = match self.token_stream.next_token(self.depth)? {
             None => return Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(Token::Word(n)) => n,
             Some(t) => return Err(anyhow!("Syntax error: unexpected token {:?}", t)),
@@ -148,7 +147,7 @@ where
     }
 
     fn expect(&mut self, token: Token) -> Result<(), Error> {
-        match self.lexer.next_token(self.depth)? {
+        match self.token_stream.next_token(self.depth)? {
             None => Err(anyhow!("Syntax error: unexpected end of file.")),
             Some(t) if t == token => Ok(()),
             Some(t) => Err(anyhow!("Syntax error: unexpected token {:?}", t)),

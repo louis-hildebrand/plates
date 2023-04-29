@@ -1,6 +1,7 @@
 use anyhow::Error;
 use clap::Parser;
 use colored::Colorize;
+use lexer::Lexer;
 
 use crate::{
     reader::{FileReader, InteractiveReader},
@@ -36,7 +37,8 @@ fn run_interactive(args: CliArgs) {
     print_info("Welcome to the plates REPL!");
 
     let reader = InteractiveReader::new();
-    let mut parser = parser::Parser::new(reader);
+    let lexer = Lexer::new(reader);
+    let mut parser = parser::Parser::new(lexer);
     let mut runtime = Runtime::new();
 
     loop {
@@ -49,7 +51,7 @@ fn run_interactive(args: CliArgs) {
             },
             Err(e) => {
                 print_error(&e);
-                parser.clear();
+                parser.clear_line();
             }
         };
 
@@ -70,7 +72,8 @@ fn run_from_files(args: CliArgs) {
         }
         Ok(r) => r,
     };
-    let mut parser = parser::Parser::new(reader);
+    let lexer = Lexer::new(reader);
+    let mut parser = parser::Parser::new(lexer);
     let mut runtime = Runtime::new();
 
     loop {

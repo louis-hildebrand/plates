@@ -2,7 +2,18 @@ use std::collections::VecDeque;
 
 use anyhow::{anyhow, Context, Error};
 
-use crate::reader::Reader;
+use crate::reader::LineStream;
+
+pub trait TokenStream {
+    /// Yields the next token. `None` signals the end of the stream.
+    fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error>;
+
+    /// Discards any remaining tokens on the current line.
+    fn clear_line(&mut self);
+
+    /// Returns true if there are no tokens left on the current line.
+    fn full_line_consumed(&mut self) -> bool;
+}
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum Token {
@@ -22,7 +33,7 @@ pub enum Token {
 
 pub struct Lexer<T>
 where
-    T: Reader,
+    T: LineStream,
 {
     tokens: VecDeque<Token>,
     reader: T,
@@ -30,37 +41,15 @@ where
 
 impl<T> Lexer<T>
 where
-    T: Reader,
+    T: LineStream,
 {
     pub fn new(reader: T) -> Self
     where
-        T: Reader,
+        T: LineStream,
     {
         Lexer {
             tokens: VecDeque::new(),
             reader,
-        }
-    }
-
-    /// Discards any remaining tokens that were already lexed.
-    pub fn clear(&mut self) {
-        self.tokens.clear();
-    }
-
-    /// Returns true if there are no tokens left on the current line.
-    pub fn full_line_consumed(&mut self) -> bool {
-        self.tokens.is_empty()
-    }
-
-    pub fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
-        loop {
-            if let Some(t) = self.tokens.pop_front() {
-                return Ok(Some(t));
-            }
-
-            if !self.refill_tokens(depth)? {
-                return Ok(None);
-            }
         }
     }
 
@@ -78,6 +67,31 @@ where
         }
 
         Ok(true)
+    }
+}
+
+impl<T> TokenStream for Lexer<T>
+where
+    T: LineStream,
+{
+    fn clear_line(&mut self) {
+        self.tokens.clear();
+    }
+
+    fn full_line_consumed(&mut self) -> bool {
+        self.tokens.is_empty()
+    }
+
+    fn next_token(&mut self, depth: usize) -> Result<Option<Token>, Error> {
+        loop {
+            if let Some(t) = self.tokens.pop_front() {
+                return Ok(Some(t));
+            }
+
+            if !self.refill_tokens(depth)? {
+                return Ok(None);
+            }
+        }
     }
 }
 
@@ -188,9 +202,25 @@ fn consume_argument(source: &str) -> Result<(Option<Token>, &str), Error> {
     Ok((Some(Token::Argument(n)), updated_source))
 }
 
+// This implementation is for testing purposes, so that the parser can be tested on a known stream of tokens.
+impl<T> TokenStream for T
+where
+    T: Iterator<Item = Token>,
+{
+    fn clear_line(&mut self) {}
+
+    fn full_line_consumed(&mut self) -> bool {
+        false
+    }
+
+    fn next_token(&mut self, _: usize) -> Result<Option<Token>, Error> {
+        Ok(self.next())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Token};
+    use super::{Lexer, Token, TokenStream};
     use paste::paste;
 
     macro_rules! assert_ok_and_eq {
@@ -410,7 +440,7 @@ mod tests {
 
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
 
-        lexer.clear();
+        lexer.clear_line();
 
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Push));
         assert_ok_and_eq!(lexer.next_token(0), Some(Token::Word(789)));
