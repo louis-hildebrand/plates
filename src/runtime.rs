@@ -274,7 +274,7 @@ impl Runtime {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{Instruction, Runtime, Word};
+    use super::*;
 
     macro_rules! assert_ok_and_eq {
         ( $actual:expr, $expected:expr ) => {
@@ -418,10 +418,7 @@ mod tests {
         };
         let after = runtime.clone();
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::PushArg(2)),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::PushArg(2)), ERR_UNDEFINED);
         assert_eq!(after, runtime);
     }
 
@@ -522,10 +519,7 @@ mod tests {
         assert_eq!(expected, runtime);
 
         // Error if the function is called
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         expected.value_stack.remove(1);
         expected.value_stack.remove(0);
         assert_eq!(expected, runtime);
@@ -609,10 +603,7 @@ mod tests {
             ..runtime.clone()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         assert_eq!(after, runtime);
     }
 
@@ -644,10 +635,7 @@ mod tests {
             ..runtime.clone()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         assert_eq!(after, runtime);
     }
 
@@ -680,10 +668,7 @@ mod tests {
             ..runtime.clone()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
         // to the next function call (there should be a test for that, like `undefined_arg_after_error`).
         runtime.args_array = vec![];
@@ -728,10 +713,7 @@ mod tests {
         assert_eq!(after_foo, runtime);
 
         // Second call (to bar): args from foo should be cleared, so $1 is invalid
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
         // to the next function call (there should be a test for that, like `undefined_arg_after_error`).
         runtime.args_array = vec![];
@@ -770,20 +752,14 @@ mod tests {
         };
 
         // foo should fail because it's accessing an an argument that doesn't exist
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
         // to the next function call.
         runtime.args_array = vec![];
         assert_eq!(after_foo, runtime);
 
         // bar should fail because there's no argument 0 (even though there was an argument 0 in foo)
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
         // to the next function call.
         runtime.args_array = vec![];
@@ -840,10 +816,7 @@ mod tests {
             ..runtime.clone()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Undefined argument or function."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDEFINED);
         assert_eq!(after, runtime);
     }
 
@@ -851,10 +824,7 @@ mod tests {
     fn callif_empty_stack() {
         let mut runtime = Runtime::new();
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -865,10 +835,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -879,10 +846,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -896,10 +860,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -931,10 +892,7 @@ mod tests {
         };
 
         // Only one value on the stack after popping function and data: stack underflow
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -949,10 +907,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -968,10 +923,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -987,10 +939,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -1021,10 +970,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -1039,10 +985,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -1074,10 +1017,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Stack underflow."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
@@ -1092,10 +1032,7 @@ mod tests {
             ..Runtime::new()
         };
 
-        assert_err_with_msg!(
-            runtime.run(Instruction::CallIf),
-            "Runtime error: Wrong type."
-        );
+        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
         assert_eq!(Runtime::new(), runtime);
     }
 
