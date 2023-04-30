@@ -166,9 +166,7 @@ impl Runtime {
             "__print__" => self.call_print(),
             "__input__" => self.call_input(),
             "__nand__" => self.call_nand(),
-            // TODO: Replace left and right shift with rotate right
-            "__shift_left__" => self.call_shift_left(),
-            "__shift_right__" => self.call_shift_right(),
+            "__rotl__" => self.call_rotl(),
             _ => Err(anyhow!(ERR_UNDEFINED)),
         }
     }
@@ -246,19 +244,10 @@ impl Runtime {
         Ok(false)
     }
 
-    fn call_shift_left(&mut self) -> Result<bool, Error> {
+    fn call_rotl(&mut self) -> Result<bool, Error> {
         let n = self.pop_data_from_stack()?;
 
-        let result = n << 1;
-        self.value_stack.push(Word::Data(result));
-
-        Ok(false)
-    }
-
-    fn call_shift_right(&mut self) -> Result<bool, Error> {
-        let n = self.pop_data_from_stack()?;
-
-        let result = n >> 1;
+        let result = n.rotate_left(1);
         self.value_stack.push(Word::Data(result));
 
         Ok(false)
@@ -559,7 +548,7 @@ mod tests {
                         0,
                         vec![
                             Instruction::PushData(1),
-                            Instruction::PushFunction("__shift_left__".to_owned()),
+                            Instruction::PushFunction("__rotl__".to_owned()),
                             Instruction::CallIf,
                         ],
                     ),
@@ -572,9 +561,7 @@ mod tests {
             ..runtime.clone()
         };
 
-        let res = runtime.run(Instruction::CallIf);
-        println!("{res:?}");
-        assert_ok_and_eq!(res, false);
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
         assert_eq!(after, runtime);
     }
 
@@ -628,7 +615,7 @@ mod tests {
                     vec![
                         Instruction::PushArg(0),
                         Instruction::PushData(1),
-                        Instruction::PushFunction("__shift_left__".to_owned()),
+                        Instruction::PushFunction("__rotl__".to_owned()),
                         Instruction::CallIf,
                         Instruction::PushArg(0),
                     ],
@@ -950,19 +937,19 @@ mod tests {
     }
 
     #[test]
-    fn builtin_shift_left() {
+    fn builtin_rotl() {
         let mut runtime = Runtime {
             value_stack: vec![
                 // 2^31 + 4 + 1
                 Word::Data(2147483653),
                 Word::Data(1),
-                Word::Function("__shift_left__".to_owned()),
+                Word::Function("__rotl__".to_owned()),
             ],
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![Word::Data(10)],
-            ..Runtime::new()
+            value_stack: vec![Word::Data(11)],
+            ..runtime.clone()
         };
 
         assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
@@ -970,9 +957,9 @@ mod tests {
     }
 
     #[test]
-    fn builtin_shift_left_empty_stack() {
+    fn builtin_rotl_empty_stack() {
         let mut runtime = Runtime {
-            value_stack: vec![Word::Data(1), Word::Function("__shift_left__".to_owned())],
+            value_stack: vec![Word::Data(1), Word::Function("__rotl__".to_owned())],
             ..Runtime::new()
         };
 
@@ -981,59 +968,12 @@ mod tests {
     }
 
     #[test]
-    fn builtin_shift_left_function_first() {
+    fn builtin_rotl_function_first() {
         let mut runtime = Runtime {
             value_stack: vec![
-                Word::Function("foo".to_owned()),
+                Word::Function("__foo__".to_owned()),
                 Word::Data(1),
-                Word::Function("__shift_left__".to_owned()),
-            ],
-            ..Runtime::new()
-        };
-
-        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
-        assert_eq!(Runtime::new(), runtime);
-    }
-
-    #[test]
-    fn builtin_shift_right() {
-        let mut runtime = Runtime {
-            value_stack: vec![
-                // 2^31 + 4 + 1
-                Word::Data(2147483653),
-                Word::Data(1),
-                Word::Function("__shift_right__".to_owned()),
-            ],
-            ..Runtime::new()
-        };
-        let after = Runtime {
-            // 2^30 + 2
-            value_stack: vec![Word::Data(1073741826)],
-            ..Runtime::new()
-        };
-
-        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
-        assert_eq!(after, runtime);
-    }
-
-    #[test]
-    fn builtin_shift_right_empty_stack() {
-        let mut runtime = Runtime {
-            value_stack: vec![Word::Data(1), Word::Function("__shift_right__".to_owned())],
-            ..Runtime::new()
-        };
-
-        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
-        assert_eq!(Runtime::new(), runtime);
-    }
-
-    #[test]
-    fn builtin_shift_right_function_first() {
-        let mut runtime = Runtime {
-            value_stack: vec![
-                Word::Function("foo".to_owned()),
-                Word::Data(1),
-                Word::Function("__shift_right__".to_owned()),
+                Word::Function("__rotl__".to_owned()),
             ],
             ..Runtime::new()
         };

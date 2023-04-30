@@ -21,8 +21,7 @@ Functions can be pushed onto the stack and then called. When called, they can mo
 - `__print__`: displays the data words starting at the top of the stack and continuing downwards until it reaches a zero word. Each word is interpreted as a UTF-32. The printed data will remain on the stack.
 - `__input__`: reads one line of input from stdin and places each character onto the stack (with the first character read on top). The characters are represented in UTF-32.
 - `__nand__`: performs bitwise NAND on the two data words at the top of the stack.
-- `__shift_left__`: performs a bitwise left shift (by one bit) on the data word at the top of the stack.
-- `__shift_right__`: performs a bitwise right shift (by one bit) on the data word at the top of the stack.
+- `__rotl__`: performs a bitwise left rotation (by one bit) on the data word at the top of the stack.
 
 ## Comments
 
