@@ -131,11 +131,16 @@ impl Runtime {
     }
 
     fn run_callif(&mut self) -> Result<bool, Error> {
-        let f = self.pop_function_from_stack()?;
+        let (f, n) = match (self.value_stack.pop(), self.value_stack.pop()) {
+            // It should be impossible to get (None, Some(_)), but check both cases to make the compiler happy
+            (None, _) | (_, None) => return Err(anyhow!(ERR_UNDERFLOW)),
+            (Some(Word::Data(_)), _) | (_, Some(Word::Function(_))) => {
+                return Err(anyhow!(ERR_TYPE))
+            }
+            (Some(Word::Function(f)), Some(Word::Data(n))) => (f, n),
+        };
 
-        let top_data = self.pop_data_from_stack()?;
-
-        if top_data == 0 {
+        if n == 0 {
             Ok(false)
         } else {
             self.call_function(&f)
@@ -226,8 +231,14 @@ impl Runtime {
 
     fn call_nand(&mut self) -> Result<bool, Error> {
         // Use !(a & b)
-        let a = self.pop_data_from_stack()?;
-        let b = self.pop_data_from_stack()?;
+        let (a, b) = match (self.value_stack.pop(), self.value_stack.pop()) {
+            // It should be impossible to get (None, Some(_)), but check both cases to make the compiler happy
+            (_, None) | (None, _) => return Err(anyhow!(ERR_UNDERFLOW)),
+            (Some(Word::Function(_)), _) | (_, Some(Word::Function(_))) => {
+                return Err(anyhow!(ERR_TYPE))
+            }
+            (Some(Word::Data(a)), Some(Word::Data(b))) => (a, b),
+        };
 
         let result = !(a & b);
         self.value_stack.push(Word::Data(result));
@@ -253,19 +264,14 @@ impl Runtime {
         Ok(false)
     }
 
+    /// Pops from the stack. If the stack was empty or the value at the top was a function, returns an error.
+    ///
+    /// This should only be used for single values, not when you need to pop multiple things.
     fn pop_data_from_stack(&mut self) -> Result<u32, Error> {
         match self.value_stack.pop() {
             None => Err(anyhow!(ERR_UNDERFLOW)),
             Some(Word::Function(_)) => Err(anyhow!(ERR_TYPE)),
             Some(Word::Data(n)) => Ok(n),
-        }
-    }
-
-    fn pop_function_from_stack(&mut self) -> Result<String, Error> {
-        match self.value_stack.pop() {
-            None => Err(anyhow!(ERR_UNDERFLOW)),
-            Some(Word::Data(_)) => Err(anyhow!(ERR_TYPE)),
-            Some(Word::Function(f)) => Ok(f),
         }
     }
 }
