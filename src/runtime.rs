@@ -165,8 +165,7 @@ impl Runtime {
         match f {
             "__print__" => self.call_print(),
             "__input__" => self.call_input(),
-            "__nand__" => self.call_nand(),
-            "__rotl__" => self.call_rotl(),
+            "__birl__" => self.call_birl(),
             _ => Err(anyhow!(ERR_UNDEFINED)),
         }
     }
@@ -227,8 +226,7 @@ impl Runtime {
         Ok(false)
     }
 
-    fn call_nand(&mut self) -> Result<bool, Error> {
-        // Use !(a & b)
+    fn call_birl(&mut self) -> Result<bool, Error> {
         let (a, b) = match (self.value_stack.pop(), self.value_stack.pop()) {
             // It should be impossible to get (None, Some(_)), but check both cases to make the compiler happy
             (_, None) | (None, _) => return Err(anyhow!(ERR_UNDERFLOW)),
@@ -238,16 +236,7 @@ impl Runtime {
             (Some(Word::Data(a)), Some(Word::Data(b))) => (a, b),
         };
 
-        let result = !(a & b);
-        self.value_stack.push(Word::Data(result));
-
-        Ok(false)
-    }
-
-    fn call_rotl(&mut self) -> Result<bool, Error> {
-        let n = self.pop_data_from_stack()?;
-
-        let result = n.rotate_left(1);
+        let result = (!a | b).rotate_left(1);
         self.value_stack.push(Word::Data(result));
 
         Ok(false)
@@ -522,9 +511,12 @@ mod tests {
 
     #[test]
     fn nested_functions_success() {
+        let a: u32 = 0b10101010_11001100_11110000_11111111;
+        let b: u32 = 0;
         let mut runtime = Runtime {
             value_stack: vec![
-                Word::Data(3),
+                Word::Data(b),
+                Word::Data(a),
                 Word::Data(1),
                 Word::Function("foo".to_owned()),
             ],
@@ -532,8 +524,9 @@ mod tests {
                 (
                     "foo".to_owned(),
                     (
-                        1,
+                        2,
                         vec![
+                            Instruction::PushArg(1),
                             Instruction::PushArg(0),
                             Instruction::PushData(1),
                             Instruction::PushFunction("bar".to_owned()),
@@ -548,7 +541,7 @@ mod tests {
                         0,
                         vec![
                             Instruction::PushData(1),
-                            Instruction::PushFunction("__rotl__".to_owned()),
+                            Instruction::PushFunction("__birl__".to_owned()),
                             Instruction::CallIf,
                         ],
                     ),
@@ -557,7 +550,7 @@ mod tests {
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![Word::Data(6), Word::Data(123)],
+            value_stack: vec![Word::Data((!a | b).rotate_left(1)), Word::Data(123)],
             ..runtime.clone()
         };
 
@@ -602,20 +595,24 @@ mod tests {
 
     #[test]
     fn undefined_arg_after_nested_builtin_function() {
+        let a: u32 = 0b11111111_11111111_11111111_11111111;
+        let b: u32 = 0b10101010_11001100_11110000_11111111;
         let mut runtime = Runtime {
             value_stack: vec![
-                Word::Data(3),
+                Word::Data(b),
+                Word::Data(a),
                 Word::Data(1),
                 Word::Function("bad".to_owned()),
             ],
             function_table: HashMap::from([(
                 "bad".to_owned(),
                 (
-                    1,
+                    2,
                     vec![
+                        Instruction::PushArg(1),
                         Instruction::PushArg(0),
                         Instruction::PushData(1),
-                        Instruction::PushFunction("__rotl__".to_owned()),
+                        Instruction::PushFunction("__birl__".to_owned()),
                         Instruction::CallIf,
                         Instruction::PushArg(0),
                     ],
@@ -624,7 +621,7 @@ mod tests {
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![Word::Data(6)],
+            value_stack: vec![Word::Data((!a | b).rotate_left(1))],
             ..runtime.clone()
         };
 
@@ -858,18 +855,18 @@ mod tests {
     }
 
     #[test]
-    fn builtin_nand() {
+    fn builtin_birl() {
         let mut runtime = Runtime {
             value_stack: vec![
-                Word::Data(12),
-                Word::Data(10),
+                Word::Data(0b100010),
+                Word::Data(0b101000),
                 Word::Data(1),
-                Word::Function("__nand__".to_owned()),
+                Word::Function("__birl__".to_owned()),
             ],
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![Word::Data(4294967287)],
+            value_stack: vec![Word::Data(0b11111111_11111111_11111111_11101111)],
             ..Runtime::new()
         };
 
@@ -878,24 +875,23 @@ mod tests {
     }
 
     #[test]
-    fn builtin_nand_empty_stack() {
+    fn builtin_birl_empty_stack() {
         let mut runtime = Runtime {
-            value_stack: vec![Word::Data(1), Word::Function("__nand__".to_owned())],
+            value_stack: vec![Word::Data(1), Word::Function("__birl__".to_owned())],
             ..Runtime::new()
         };
 
-        // Only one value on the stack after popping function and data: stack underflow
         assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
         assert_eq!(Runtime::new(), runtime);
     }
 
     #[test]
-    fn builtin_nand_almost_empty_stack() {
+    fn builtin_birl_almost_empty_stack() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Function("foo".to_owned()),
                 Word::Data(1),
-                Word::Function("__nand__".to_owned()),
+                Word::Function("__birl__".to_owned()),
             ],
             ..Runtime::new()
         };
@@ -905,13 +901,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_nand_function_first() {
+    fn builtin_birl_function_first() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Data(42),
                 Word::Function("foo".to_owned()),
                 Word::Data(1),
-                Word::Function("__nand__".to_owned()),
+                Word::Function("__birl__".to_owned()),
             ],
             ..Runtime::new()
         };
@@ -921,59 +917,13 @@ mod tests {
     }
 
     #[test]
-    fn builtin_nand_function_second() {
+    fn builtin_birl_function_second() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Function("foo".to_owned()),
                 Word::Data(42),
                 Word::Data(1),
-                Word::Function("__nand__".to_owned()),
-            ],
-            ..Runtime::new()
-        };
-
-        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_TYPE);
-        assert_eq!(Runtime::new(), runtime);
-    }
-
-    #[test]
-    fn builtin_rotl() {
-        let mut runtime = Runtime {
-            value_stack: vec![
-                // 2^31 + 4 + 1
-                Word::Data(2147483653),
-                Word::Data(1),
-                Word::Function("__rotl__".to_owned()),
-            ],
-            ..Runtime::new()
-        };
-        let after = Runtime {
-            value_stack: vec![Word::Data(11)],
-            ..runtime.clone()
-        };
-
-        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
-        assert_eq!(after, runtime);
-    }
-
-    #[test]
-    fn builtin_rotl_empty_stack() {
-        let mut runtime = Runtime {
-            value_stack: vec![Word::Data(1), Word::Function("__rotl__".to_owned())],
-            ..Runtime::new()
-        };
-
-        assert_err_with_msg!(runtime.run(Instruction::CallIf), ERR_UNDERFLOW);
-        assert_eq!(Runtime::new(), runtime);
-    }
-
-    #[test]
-    fn builtin_rotl_function_first() {
-        let mut runtime = Runtime {
-            value_stack: vec![
-                Word::Function("__foo__".to_owned()),
-                Word::Data(1),
-                Word::Function("__rotl__".to_owned()),
+                Word::Function("__birl__".to_owned()),
             ],
             ..Runtime::new()
         };
