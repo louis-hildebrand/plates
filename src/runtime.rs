@@ -142,17 +142,38 @@ impl Runtime {
         }
     }
 
+    /// This does not run the function in its entirety, it just pushes the body of the function onto the stack.
     fn call_function(&mut self, f: &str) -> Result<bool, Error> {
-        if f.starts_with("__") {
-            return self.call_builtin(f);
-        }
+        // Clear the args array so that args from a previous function call don't leak to a subsequent function call.
+        // Clearing the array before each call should be enough to guarantee this since it is a syntax error to use
+        // arguments outside a function.
+        self.args_array.clear();
 
+        if f.starts_with("__") {
+            self.call_builtin_function(f)
+        } else {
+            self.call_custom_function(f)
+        }
+    }
+
+    fn call_builtin_function(&mut self, f: &str) -> Result<bool, Error> {
+        match f {
+            "__print__" => self.call_print(),
+            "__input__" => self.call_input(),
+            "__nand__" => self.call_nand(),
+            // TODO: Replace left and right shift with rotate right
+            "__shift_left__" => self.call_shift_left(),
+            "__shift_right__" => self.call_shift_right(),
+            _ => Err(anyhow!(ERR_UNDEFINED)),
+        }
+    }
+
+    fn call_custom_function(&mut self, f: &str) -> Result<bool, Error> {
         let (arg_count, body) = match self.function_table.get(f) {
             None => return Err(anyhow!(ERR_UNDEFINED)),
             Some(body) => body,
         };
 
-        self.args_array.clear();
         for _ in 0..*arg_count {
             let n = match self.value_stack.pop() {
                 None => return Err(anyhow!(ERR_UNDERFLOW)),
@@ -167,17 +188,6 @@ impl Runtime {
         }
 
         Ok(false)
-    }
-
-    pub fn call_builtin(&mut self, f: &str) -> Result<bool, Error> {
-        match f {
-            "__print__" => self.call_print(),
-            "__input__" => self.call_input(),
-            "__nand__" => self.call_nand(),
-            "__shift_left__" => self.call_shift_left(),
-            "__shift_right__" => self.call_shift_right(),
-            _ => Err(anyhow!(ERR_UNDEFINED)),
-        }
     }
 
     fn call_print(&mut self) -> Result<bool, Error> {
@@ -412,7 +422,7 @@ mod tests {
             runtime.run(Instruction::PushArg(2)),
             "Runtime error: Undefined argument or function."
         );
-        assert_eq!(runtime, after);
+        assert_eq!(after, runtime);
     }
 
     #[test]
@@ -463,14 +473,7 @@ mod tests {
                 Word::Data(123),
                 Word::Data(456),
             ],
-            function_table: HashMap::from([(
-                "foo".to_owned(),
-                (
-                    0,
-                    vec![Instruction::PushData(123), Instruction::PushData(456)],
-                ),
-            )]),
-            ..Runtime::new()
+            ..runtime.clone()
         };
 
         assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
@@ -480,31 +483,19 @@ mod tests {
     #[test]
     fn callif_false() {
         let mut runtime = Runtime {
-            value_stack: vec![
-                Word::Function("bar".to_owned()),
-                Word::Data(789),
-                Word::Data(0),
-                Word::Function("foo".to_owned()),
-            ],
+            value_stack: vec![Word::Data(0), Word::Function("foo".to_owned())],
             function_table: HashMap::from([(
                 "foo".to_owned(),
                 (
-                    0,
+                    1,
                     vec![Instruction::PushData(123), Instruction::PushData(456)],
                 ),
             )]),
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![Word::Function("bar".to_owned()), Word::Data(789)],
-            function_table: HashMap::from([(
-                "foo".to_owned(),
-                (
-                    0,
-                    vec![Instruction::PushData(123), Instruction::PushData(456)],
-                ),
-            )]),
-            ..Runtime::new()
+            value_stack: vec![],
+            ..runtime.clone()
         };
 
         assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
@@ -541,7 +532,7 @@ mod tests {
     }
 
     #[test]
-    fn callif_nested_success() {
+    fn nested_functions_success() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Data(3),
@@ -581,12 +572,14 @@ mod tests {
             ..runtime.clone()
         };
 
-        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        let res = runtime.run(Instruction::CallIf);
+        println!("{res:?}");
+        assert_ok_and_eq!(res, false);
         assert_eq!(after, runtime);
     }
 
     #[test]
-    fn callif_nested_custom_args_cleared() {
+    fn undefined_arg_after_nested_custom_function() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Data(3),
@@ -612,7 +605,7 @@ mod tests {
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![],
+            value_stack: vec![Word::Data(3)],
             ..runtime.clone()
         };
 
@@ -624,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn callif_nested_builtin_args_cleared() {
+    fn undefined_arg_after_nested_builtin_function() {
         let mut runtime = Runtime {
             value_stack: vec![
                 Word::Data(3),
@@ -647,7 +640,7 @@ mod tests {
             ..Runtime::new()
         };
         let after = Runtime {
-            value_stack: vec![],
+            value_stack: vec![Word::Data(6)],
             ..runtime.clone()
         };
 
@@ -656,6 +649,145 @@ mod tests {
             "Runtime error: Undefined argument or function."
         );
         assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn undefined_arg_in_nested_function() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(4),
+                Word::Data(1),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([
+                (
+                    "foo".to_owned(),
+                    (
+                        1,
+                        vec![
+                            Instruction::PushData(1),
+                            Instruction::PushFunction("bar".to_owned()),
+                            Instruction::CallIf,
+                        ],
+                    ),
+                ),
+                ("bar".to_owned(), (0, vec![Instruction::PushArg(0)])),
+            ]),
+            ..Runtime::new()
+        };
+        let after = Runtime {
+            value_stack: vec![],
+            ..runtime.clone()
+        };
+
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
+        // to the next function call (there should be a test for that, like `undefined_arg_after_error`).
+        runtime.args_array = vec![];
+        assert_eq!(after, runtime);
+    }
+
+    #[test]
+    fn undefined_arg_in_successive_functions() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(123),
+                Word::Data(1),
+                Word::Function("bar".to_owned()),
+                Word::Data(456),
+                Word::Data(1),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([
+                ("foo".to_owned(), (1, vec![])),
+                ("bar".to_owned(), (0, vec![Instruction::PushArg(0)])),
+            ]),
+            ..Runtime::new()
+        };
+        let after_foo = Runtime {
+            value_stack: vec![
+                Word::Data(123),
+                Word::Data(1),
+                Word::Function("bar".to_owned()),
+            ],
+            ..runtime.clone()
+        };
+        let after_bar = Runtime {
+            value_stack: vec![Word::Data(123)],
+            ..runtime.clone()
+        };
+
+        // First call (to foo): no problem
+        assert_ok_and_eq!(runtime.run(Instruction::CallIf), false);
+        // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
+        // to the next function call (there should be a test for that, like `undefined_arg_after_error`).
+        runtime.args_array = vec![];
+        assert_eq!(after_foo, runtime);
+
+        // Second call (to bar): args from foo should be cleared, so $1 is invalid
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
+        // to the next function call (there should be a test for that, like `undefined_arg_after_error`).
+        runtime.args_array = vec![];
+        assert_eq!(after_bar, runtime);
+    }
+
+    /// Checks that arguments don't leak from one function call to the next after an error.
+    #[test]
+    fn undefined_arg_after_error() {
+        let mut runtime = Runtime {
+            value_stack: vec![
+                Word::Data(42),
+                Word::Data(1),
+                Word::Function("bar".to_owned()),
+                Word::Data(123),
+                Word::Data(1),
+                Word::Function("foo".to_owned()),
+            ],
+            function_table: HashMap::from([
+                ("foo".to_owned(), (1, vec![Instruction::PushArg(999)])),
+                ("bar".to_owned(), (0, vec![Instruction::PushArg(0)])),
+            ]),
+            ..Runtime::new()
+        };
+        let after_foo = Runtime {
+            value_stack: vec![
+                Word::Data(42),
+                Word::Data(1),
+                Word::Function("bar".to_owned()),
+            ],
+            ..runtime.clone()
+        };
+        let after_bar = Runtime {
+            value_stack: vec![Word::Data(42)],
+            ..runtime.clone()
+        };
+
+        // foo should fail because it's accessing an an argument that doesn't exist
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
+        // to the next function call.
+        runtime.args_array = vec![];
+        assert_eq!(after_foo, runtime);
+
+        // bar should fail because there's no argument 0 (even though there was an argument 0 in foo)
+        assert_err_with_msg!(
+            runtime.run(Instruction::CallIf),
+            "Runtime error: Undefined argument or function."
+        );
+        // Ignore the args array: it doesn't matter whether or not it's cleared right away, as long as args don't leak
+        // to the next function call.
+        runtime.args_array = vec![];
+        assert_eq!(after_bar, runtime);
     }
 
     #[test]
@@ -692,10 +824,10 @@ mod tests {
             function_table: HashMap::from([(
                 "evil".to_owned(),
                 (
-                    1,
+                    0,
                     vec![
                         Instruction::PushData(123),
-                        Instruction::PushArg(0),
+                        Instruction::PushArg(1),
                         Instruction::PushData(456),
                     ],
                 ),
@@ -704,6 +836,7 @@ mod tests {
         };
         let after = Runtime {
             value_stack: vec![Word::Data(123)],
+            instruction_stack: vec![],
             ..runtime.clone()
         };
 
